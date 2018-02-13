@@ -1,0 +1,56 @@
+Data generation: (-> Yan)
+- Multi purpose function for putting small mnist images with various scales onto big background frame
+- Degree of small mnist images overlap as parameter of script
+- Background first in main background color of mnist images
+- Different rotation, scaling, ...
+- not in tensorflow
+
+
+Preprocessing: (-> Chris)
+- Different normalizations (z-standardization vs. min-max)
+- Function in TF
+
+def preprocessing(data, type='min-max', param1=None, param2=None):
+	if type == 'min-max':
+		prepd_data = tf.preprocessing(data, 'min-max')
+	elif ...
+	return prepd_data
+
+
+Batch creation: (-> Matthias)
+- Script
+- in Tensorflow
+
+
+Coding Style:
+- PEP8 --> e.g. look up comment style
+
+
+Folder structure:
+- Snake case
+
+
+Report: (-> Chris)
+- In Latex 
+- Reading literature
+- 1-column format
+
+
+Group working space: (-> Yan)
+- GIT 
+- Introduction for Chris next meeting!
+
+
+Coding the Faster R-CNN: (-> Matthias, Yan)
+-Implement 
+
+
+Error/Eevaluation measures for multiclass region proposal and classification
+
+
+(Grid Search & AWS?)
+
+
+Questions to Lukas:
+- Evaluation: Difference between tuned and fine-tuned network? (-> Matthias)
+- Ask Lukas for latex template (-> Matthias)
