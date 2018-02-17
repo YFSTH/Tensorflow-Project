@@ -3,7 +3,9 @@ PARTLY DONE - Multi purpose function for putting small mnist images with various
 NOT YET (?) - Degree of small mnist images overlap as parameter of script
 DONE - Background first in main background color of mnist images
 DONE - Different rotation, scaling, ...
-<p style='color:red'>DONE - not in tensorflow</p>
+DONE - not in tensorflow
+=> Y: Data is huge, upload maybe tonight on google drive then I will give you the link. Actually I don´t know whether is is 
+      smarter to implement the degree of overlap thing or to invest it in network programming, ideas?
 
 
 Preprocessing: (-> Chris)
