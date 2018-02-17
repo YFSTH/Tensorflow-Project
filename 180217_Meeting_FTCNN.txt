@@ -1,9 +1,9 @@
 Data generation: (-> Yan)
-- Multi purpose function for putting small mnist images with various scales onto big background frame
-- Degree of small mnist images overlap as parameter of script
-- Background first in main background color of mnist images
-- Different rotation, scaling, ...
-- not in tensorflow
+PARTLY DONE - Multi purpose function for putting small mnist images with various scales onto big background frame
+NOT YET (?) - Degree of small mnist images overlap as parameter of script
+DONE - Background first in main background color of mnist images
+DONE - Different rotation, scaling, ...
+<p style='color:red'>DONE - not in tensorflow</p>
 
 
 Preprocessing: (-> Chris)
