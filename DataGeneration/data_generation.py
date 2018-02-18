@@ -1,11 +1,6 @@
-'''Data generation: (-> Yan)
-- Multi purpose function for putting small mnist images with various scales onto big background frame
-- Degree of small mnist images overlap as parameter of script
-- Background first in main background color of mnist images
-- Different rotation, scaling, ...
-- not in tensorflow'''
 %matplotlib inline
 import matplotlib.pyplot as plt
+import pdb
 
 # TODO: UPLOAD ON GITHUB
 
@@ -49,21 +44,22 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
 
     # get raw mnist images and labels
     train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
-
+    
+    rnd_indxs = np.random.choice(np.arange(0,len(train_imgs)), 15000, replace=False)
+    train_imgs_selection = train_imgs[rnd_indxs]
+    train_labels_selection = train_labels[rnd_indxs]
+    
     # get rotated and scaled mnist images
-    mnist_transformed, angles, scales = [], [], []
-    for dataset in [(test_imgs,'test')]: # (train_imgs,'training'),(valid_imgs,'validation'), 
-        transformed, angles_, scales_ = augment_mnist(dataset[0], dataset[1], counterclock_angle=counterclock_angle, clockwise_angle=clockwise_angle,
+    mnist_transformed, mnist_labels, angles, scales = [], [], [], []
+    
+    for dataset in [(train_imgs_selection,'training', train_labels_selection),(test_imgs,'test', test_labels), (valid_imgs,'validation', valid_labels)]:
+        transformed, labels, angles_, scales_ = augment_mnist(dataset[0], dataset[1], dataset[2], counterclock_angle=counterclock_angle, clockwise_angle=clockwise_angle,
                                                       rotation_steps=rotation_steps, min_scaling=min_scaling, max_scaling=max_scaling, scaling_steps=scaling_steps)
         mnist_transformed.append(transformed)
         angles.append(angles_)
-        scales.append(scales_)        
-        
-    # train labels shape: (55000,)
-    mnist_labels = []
-    for dataset in [train_labels, valid_labels, test_labels]:
-        mnist_labels.append(np.repeat(dataset, rotation_steps*scaling_steps))
-    # Create collages of mnist images and corresponding labels
+        scales.append(scales_)     
+        mnist_labels.append(labels)
+    
     collages = [[], [], []]
     targets =  [[], [], []]
 
@@ -72,6 +68,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
 
         for c in range(num_collages):
             collage_frame = create_frame(collage_size, background)
+            
                 
             # randomly choose random number of mnist images for collage
             num_mnist_imgs = np.random.randint(min_num_imgs, max_num_imgs+1)
@@ -79,9 +76,8 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
             drawn_imgs = dataset[1][rand_indxs]
             drawn_angles = angles[dataset[0]][rand_indxs]
             drawn_scales = scales[dataset[0]][rand_indxs]
-            drawn_targets = mnist_labels[2][rand_indxs]
-                        
-
+            drawn_targets = mnist_labels[dataset[0]][rand_indxs]
+            
             # add label list for every collage that is created
             targets[ds_indx].append([])
 
@@ -206,7 +202,7 @@ def create_frame(frame_size, background):
         tmp = abs(np.random.normal(0,1,(frame_size, frame_size)))
         return (tmp / np.max(tmp))
 
-def augment_mnist(imgs, name, counterclock_angle=30, clockwise_angle=30, rotation_steps=7, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
+def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30, rotation_steps=7, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
     '''
     Create set of mnist images with the specified rotation angles and scales.
     :param imgs: the train, validation xor test mnist image set
@@ -217,16 +213,18 @@ def augment_mnist(imgs, name, counterclock_angle=30, clockwise_angle=30, rotatio
     :param num_up_scales: number of expand operations
     :return: mnist images with different rotations and scales
     '''
+    import numpy as np
+    labels = np.repeat(labels, rotation_steps*scaling_steps)
     
     # check whether this set of augmented images was already created:
     import os
     import numpy as np
-    file1_name = '' + str(counterclock_angle) + '_' + str(clockwise_angle) + '_' + str(rotation_steps) + '_' + \
-                str(min_scaling) + '_' + str(max_scaling) + '_' + str(scaling_steps) + '_' + name + '.pkl'
-    file2_name = '' + str(counterclock_angle) + '_' + str(clockwise_angle) + '_' + str(rotation_steps) + '_' + \
-                str(min_scaling) + '_' + str(max_scaling) + '_' + str(scaling_steps) + '_' + name + '_angles.pkl'
-    file3_name = '' + str(counterclock_angle) + '_' + str(clockwise_angle) + '_' + str(rotation_steps) + '_' + \
-                str(min_scaling) + '_' + str(max_scaling) + '_' + str(scaling_steps) + '_' + name + '_scales.pkl'
+    base_name = '' + str(counterclock_angle) + '_' + str(clockwise_angle) + '_' + str(rotation_steps) + '_' + \
+                str(min_scaling) + '_' + str(max_scaling) + '_' + str(scaling_steps) + '_' + name
+    file1_name = base_name + '.pkl'
+    file2_name = base_name + '_angles.pkl'
+    file3_name = base_name + '_scales.pkl'
+    file4_name = base_name + '_labels.pkl'
     existence = os.path.isfile(file1_name)
     
     import pickle
@@ -237,19 +235,23 @@ def augment_mnist(imgs, name, counterclock_angle=30, clockwise_angle=30, rotatio
         angles = []
         for i1 in range(imgs.shape[0]):
             seq, angls = rotation_sequence(imgs[i1], counterclock_angle, clockwise_angle, rotation_steps)
-            # gives 7 rotated images
-            # and   7 angles
+            # 7 angles of same img
+            
             for i2 in enumerate(seq):
                 tmp, scals = scale_pyramid(i2[1], min_scaling=min_scaling, max_scaling=max_scaling, scaling_steps=scaling_steps)
                 # gives 5 scales (of each of the seven rotated images)
                 #angls_ = np.repeat(angls[i2[0]], len(tmp)) # one rotation angle repeated as often as there are diff scales
                 angls_ = np.repeat(angls[i2[0]], len(tmp))
+                
+
+                
                 for i3, scale, angle in zip(tmp, scals, angls_): # 
                     augmented_imgs.append(i3)
                     scales.append(scale)
                     angles.append(angle)
-                    
+        
             print(i1,'/',imgs.shape[0])
+            
         # save dataset to disk
         with open(file1_name, 'wb') as f:
             pickle.dump(augmented_imgs, f)
@@ -257,6 +259,8 @@ def augment_mnist(imgs, name, counterclock_angle=30, clockwise_angle=30, rotatio
             pickle.dump(angles, f)
         with open(file3_name, 'wb') as f:
             pickle.dump(scales, f)
+        with open(file4_name, 'wb') as f:
+            pickle.dump(labels, f)
     else:
         # load already existing data set
         import pickle
@@ -266,8 +270,10 @@ def augment_mnist(imgs, name, counterclock_angle=30, clockwise_angle=30, rotatio
             angles = pickle.load(file)
         with open(file3_name, 'rb') as file:
             scales = pickle.load(file)
-    
-    return np.array(augmented_imgs), np.array(angles), np.array(scales)
+        with open(file4_name, 'rb') as file:
+            labels = pickle.load(file)
+    #for i in range(len(augmented_imgs)): plt.imshow(augmented_imgs[i]);plt.show();print(labels[i])
+    return np.array(augmented_imgs), np.array(labels), np.array(angles), np.array(scales)
 
 def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
     '''
