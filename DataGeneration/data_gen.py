@@ -58,7 +58,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
         mnist_transformed.append(transformed)
         angles.append(angles_)
         scales.append(scales_)     
-        mnist_labels.append(labels)
+        mnist_labels.append(labels) 
     
     collages = [[], [], []]
     targets =  [[], [], []]
