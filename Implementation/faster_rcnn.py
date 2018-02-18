@@ -5,7 +5,7 @@ import tensorflow as tf
 
 def create_graph():
     """ Creates a graph from saved GraphDef file and returns a saver. """
-    with tf.gfile.FastGFile(os.path.join("imagenet", "classify_image_graph_def.pb"), 'rb') as file:
+    with tf.gfile.FastGFile(os.path.join("ImageNet", "classify_image_graph_def.pb"), 'rb') as file:
         graph_def = tf.GraphDef()
         graph_def.ParseFromString(file.read())
         _ = tf.import_graph_def(graph_def, name='')
@@ -13,7 +13,7 @@ def create_graph():
 
 if __name__ == "__main__":
     # load test image
-    image = tf.gfile.FastGFile(os.path.join("imagenet", "cropped_panda.jpg"), 'rb').read()
+    image = tf.gfile.FastGFile(os.path.join("ImageNet", "cropped_panda.jpg"), 'rb').read()
     
     # load DFG
     create_graph()
