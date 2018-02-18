@@ -176,13 +176,20 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
             plt.show()
             print(targets[ds_indx][c])        
             
-    import pickle
-    collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'collages.pkl'
-    targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'targets.pkl'    
-    with open(collages_filename, 'wb') as f:
-            pickle.dump(collages, f)   
-    with open(targets_filename, 'wb') as f:
-            pickle.dump(targets, f)   
+            import pickle
+            if dataset[0] == 0:
+                name = 'train'
+            if dataset[0] == 1:
+                name = 'test'
+            if dataset[0] == 2:
+                name = 'valid'
+                
+            collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
+            targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'    
+            with open(collages_filename, 'wb') as f:
+                    pickle.dump(collages, f)   
+            with open(targets_filename, 'wb') as f:
+                    pickle.dump(targets, f)   
 
     return collages, targets
 
