@@ -22,12 +22,21 @@ def loader():
     return data
 
 # Enshure right data types and dimensionality of data
-X_train, X_valid, y_train, y_valid = loader()
+X_train, X_valid, y_valid, y_train = loader()
 X_train = np.array(X_train)
 X_valid = np.array(X_valid)
 y_train = np.array(y_train)
 y_train = np.array([l[0][0] for l in y_train])
 y_valid = np.array([l[0][0] for l in y_valid])
+
+for i in range(len(X_train)):
+    plt.imshow(X_train[i])
+    print(y_train[i])
+    plt.show()
+    plt.imshow(X_valid[i])
+    print(y_valid[i])
+    plt.show()
+
 
 def one_hot(data, cols=10):
     tmp = np.zeros((data.shape[0],10))
@@ -47,13 +56,14 @@ with tf.name_scope('conv_layers'):
         pool1 = tf.nn.avg_pool(conv1, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
     with tf.variable_scope('conv2'):
         conv2 = convolutional(pool1, [3, 3, 32,64], 1, True, tf.nn.relu)
+        pool2 = tf.nn.avg_pool(conv2, [1, 3, 3, 1], [1, 3, 3, 1], 'SAME')
     with tf.variable_scope('conv3'):
         conv3 = convolutional(conv2, [3, 3,64,128], 1, True, tf.nn.relu)
     with tf.variable_scope('conv4'):
         conv4 = convolutional(conv3, [3,3,128,256], 1, True, tf.nn.relu)
     with tf.variable_scope('conv5'):
         conv5 = convolutional(conv4, [3,3,256,512], 1, True, tf.nn.relu)
-        pool2 = tf.nn.avg_pool(conv5, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
+        pool3 = tf.nn.avg_pool(conv5, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
 
 with tf.name_scope('ff_layers'):
     flattened = tf.reshape(pool2, [BATCHSIZE, -1])# shape supposed to be: (batchsize, k)
