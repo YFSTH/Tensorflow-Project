@@ -1,14 +1,11 @@
-%matplotlib inline
 import matplotlib.pyplot as plt
 import pdb
 
-# TODO: UPLOAD ON GITHUB
-
 def get_mnist():
-    '''
+    """
     Loads mnist data.
     :return: train images and labels, validation images and labels, test images and labels
-    '''
+    """
     from tensorflow.examples.tutorials.mnist import input_data
     mnist = input_data.read_data_sets("/tmp/data/")
     train_imgs = mnist.train.images # 55000
@@ -25,7 +22,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
                     allow_overhang=True, background='black',
                     min_scaling=0.25, max_scaling=2.0, scaling_steps=5,
                     counterclock_angle=30, clockwise_angle=30, rotation_steps=7):
-    '''
+    """
     Creates images (collages) containing a certain number of mnist images which exhibit a specified overlap.
     :param imgs: mnist train, validation xor test set
     :param labels: mnist train, validation xor test labels
@@ -39,7 +36,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
                         (=drawing with replacement from the pool of rotated and scaled mnist images)
     :return: the set of created collages containing multiple mnist images on a bigger frame and a label dictionary
              characterized by: {'target_numbers': [t1,...], 'target_positions': [(x1,y1),...]}
-    '''
+    """
     import numpy as np
 
     # get raw mnist images and labels
@@ -48,7 +45,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
     rnd_indxs = np.random.choice(np.arange(0,len(train_imgs)), 15000, replace=False)
     train_imgs_selection = train_imgs[rnd_indxs]
     train_labels_selection = train_labels[rnd_indxs]
-    
+
     # get rotated and scaled mnist images
     mnist_transformed, mnist_labels, angles, scales = [], [], [], []
     
@@ -194,12 +191,12 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
     return collages, targets
 
 def create_frame(frame_size, background):
-    '''
+    """
     Creates a frame for the creation of mnist collages
     :param frame_size: size of the square shaped mnist collage
     :param background: 'black', 'white' or 'gaussian_noise'
     :return: frame of specified size and background
-    '''
+    """
     import numpy as np
     if background == 'black':
         return np.zeros((frame_size, frame_size))
@@ -210,7 +207,7 @@ def create_frame(frame_size, background):
         return (tmp / np.max(tmp))
 
 def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30, rotation_steps=7, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
-    '''
+    """
     Create set of mnist images with the specified rotation angles and scales.
     :param imgs: the train, validation xor test mnist image set
     :param counterclock_angle: initial counter-clockwise rotation angle, must be positive number
@@ -219,7 +216,7 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
     :param num_down_scale: number of reduce operations
     :param num_up_scales: number of expand operations
     :return: mnist images with different rotations and scales
-    '''
+    """
     import numpy as np
     labels = np.repeat(labels, rotation_steps*scaling_steps)
     
@@ -283,7 +280,7 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
     return np.array(augmented_imgs), np.array(labels), np.array(angles), np.array(scales)
 
 def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
-    '''
+    """
     Rotate the image starting with a counter-clockwise rotation and proceed with rotations going more and more into
     the clockwise rotation direction in the defined number of steps.
     :param img: input gray value image
@@ -291,7 +288,7 @@ def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
     :param clockwise_angle: last clockwise rotation angle, must be positive number
     :param steps: number of computed angles between counterclock-wise and clockwise rotation angle
     :return: list of rated images, starting with the counter-clockwise rotated
-    '''
+    """
     from skimage.transform import rotate
     import numpy as np
     if img.shape != (28, 28):
@@ -304,7 +301,7 @@ def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
     return seq, angles
 
 def scale_pyramid(img, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
-    '''
+    """
     Create a scale pyramid of image. Thus create upscaled representations via expand operation and downscaled ones via
     the reduce operation. Before the up-/down-scaling these operations apply a low-pass filter in the form of a gaussian
     kernel to avoid aliasing artifacts due to the sampling frequency being lower than fourier space frequencies of the
@@ -313,7 +310,7 @@ def scale_pyramid(img, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
     :param num_down_scales: number of reduce operations
     :param num_up_scales: number of expand operations
     :return: list with image in different scales (e.g. 2x, 1x, 0.5x)
-    '''
+    """
     from skimage.transform import rescale
     import numpy as np
     if img.shape != (28,28):
