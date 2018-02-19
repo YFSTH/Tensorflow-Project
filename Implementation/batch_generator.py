@@ -40,3 +40,4 @@ class MNISTCollage:
             first = i * batch_size
             last = first + batch_size
             yield np.squeeze(data[first:last]), labels[first:last]
+

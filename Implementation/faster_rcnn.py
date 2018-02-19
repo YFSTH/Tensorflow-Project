@@ -23,6 +23,8 @@ if __name__ == "__main__":
     # read out last pooling layer
     with tf.Session() as sess:
         for image, label in mnist.get_batch(mnist.train_data, mnist.train_labels, 1):
-            pool_tensor = sess.graph.get_tensor_by_name('pool_3:0')
-            output = sess.run(pool_tensor, feed_dict={'Cast:0': image})
-            output = np.squeeze(output)
+            #pool_tensor = sess.graph.get_tensor_by_name('mi#xed_10/joi')
+            #output = sess.run(pool_tensor, feed_dict={'Cast:0': image})
+            #output = np.squeeze(output)
+            #print(output) # --> (1,71,71,192)
+            print([n.name for n in tf.all_variables()])#get_default_graph()#.get_operations()])#as_graph_def().node])
