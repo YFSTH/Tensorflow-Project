@@ -18,10 +18,10 @@ def get_mnist():
 
 train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
 
-def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_imgs=8, replacement=True,
-                    allow_overhang=True, background='black',
-                    min_scaling=0.25, max_scaling=2.0, scaling_steps=5,
-                    counterclock_angle=30, clockwise_angle=30, rotation_steps=7):
+def create_collages(num_collages=1000, collage_size=128, min_num_imgs=1, max_num_imgs=1, replacement=True,
+                    allow_overhang=False, background='black',
+                    min_scaling=0.5, max_scaling=1.5, scaling_steps=3,
+                    counterclock_angle=0, clockwise_angle=0, rotation_steps=1):
     """
     Creates images (collages) containing a certain number of mnist images which exhibit a specified overlap.
     :param imgs: mnist train, validation xor test set
@@ -49,7 +49,7 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
     # get rotated and scaled mnist images
     mnist_transformed, mnist_labels, angles, scales = [], [], [], []
     
-    for dataset in [(train_imgs_selection,'training', train_labels_selection),(test_imgs,'test', test_labels), (valid_imgs,'validation', valid_labels)]:
+    for dataset in [(valid_imgs,'validation', valid_labels), (train_imgs_selection,'training', train_labels_selection),(test_imgs,'test', test_labels)]:
         transformed, labels, angles_, scales_ = augment_mnist(dataset[0], dataset[1], dataset[2], counterclock_angle=counterclock_angle, clockwise_angle=clockwise_angle,
                                                       rotation_steps=rotation_steps, min_scaling=min_scaling, max_scaling=max_scaling, scaling_steps=scaling_steps)
         mnist_transformed.append(transformed)
@@ -169,26 +169,25 @@ def create_collages(num_collages=15, collage_size=128, min_num_imgs=2, max_num_i
 
             collages[ds_indx].append(collage_frame)
             
-            plt.imshow(collage_frame)
-            plt.show()
-            print(targets[ds_indx][c])        
+            #plt.imshow(collage_frame)
+            #plt.show()
+            #print(targets[ds_indx][c])
             
-            import pickle
-            if dataset[0] == 0:
-                name = 'train'
-            if dataset[0] == 1:
-                name = 'test'
-            if dataset[0] == 2:
-                name = 'valid'
-                
-            collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
-            targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'    
-            with open(collages_filename, 'wb') as f:
-                    pickle.dump(collages, f)   
-            with open(targets_filename, 'wb') as f:
-                    pickle.dump(targets, f)   
+        import pickle
+        if dataset[0] == 0:
+            name = 'train'
+        if dataset[0] == 1:
+            name = 'test'
+        if dataset[0] == 2:
+            name = 'valid'
 
-    return collages, targets
+        collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
+        targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
+        with open(collages_filename, 'wb') as f:
+                pickle.dump(collages, f)
+        with open(targets_filename, 'wb') as f:
+                pickle.dump(targets, f)
+
 
 def create_frame(frame_size, background):
     """
