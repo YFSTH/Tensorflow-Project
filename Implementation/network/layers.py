@@ -48,7 +48,7 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
     :param activation: activation function
     :return: weighted output
     """
-    fan_in = int(input.shape[-1])
+    fan_in = int(input.shape[1])
 
     if "relu" in str(activation):
         weight_initializer = tf.random_normal_initializer(stddev=2.0 / fan_in)
@@ -63,10 +63,11 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
     output = tf.matmul(input, weights) + biases
 
     if normalization:
-        mean, var = tf.nn.moments(output, axes=[0, 1, 2])
+        mean, var = tf.nn.moments(output, axes=[0])
         output = tf.nn.batch_normalization(output, mean, var, offset=None, scale=None, variance_epsilon=1e-6)
 
     if callable(activation):
         output = activation(output)
 
     return output
+
