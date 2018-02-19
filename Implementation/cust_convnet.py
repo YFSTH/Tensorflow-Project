@@ -14,15 +14,20 @@ LEARNING_RATE = 0.001
 EPOCHS = 1
 
 def loader():
-    data = []
+    train, valid, test = [], [], []
     for file in os.listdir('cust_cnn_data'):
         if 'collage' in file or 'targets' in file:
-            with open('cust_cnn_data/'+file, 'rb') as f:
-                data.append(pickle.load(f))
-    return data
+            if 'train' in file:
+                with open('cust_cnn_data/'+file, 'rb') as f:
+                    train.append(pickle.load(f))
+            if 'valid' in file:
+                with open('cust_cnn_data/'+file, 'rb') as f:
+                    valid.append(pickle.load(f))
+    return [train[0], train[1], valid[0], valid[1]]
+
 
 # Enshure right data types and dimensionality of data
-X_train, X_valid, y_valid, y_train = loader()
+X_train, y_train, X_valid, y_valid = loader()
 X_train = np.array(X_train)
 X_valid = np.array(X_valid)
 y_train = np.array(y_train)
