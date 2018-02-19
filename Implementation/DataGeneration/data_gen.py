@@ -173,20 +173,21 @@ def create_collages(num_collages=1000, collage_size=128, min_num_imgs=1, max_num
             #plt.show()
             #print(targets[ds_indx][c])
 
-    import pickle
-    if dataset[0] == 0:
-        name = 'train'
-    if dataset[0] == 1:
-        name = 'test'
-    if dataset[0] == 2:
-        name = 'valid'
-
-    collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
-    targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
-    with open(collages_filename, 'wb') as f:
-            pickle.dump(collages, f)
-    with open(targets_filename, 'wb') as f:
-            pickle.dump(targets, f)
+        import pickle
+        if dataset[0] == 0:
+            name = 'train'
+        if dataset[0] == 1:
+            name = 'test'
+        if dataset[0] == 2:
+            name = 'valid'
+        import pdb
+        pdb.set_trace()
+        collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
+        targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
+        with open(collages_filename, 'wb') as f:
+                pickle.dump(collages[dataset[0]], f)
+        with open(targets_filename, 'wb') as f:
+                pickle.dump(targets[dataset[0]], f)
 
 
 def create_frame(frame_size, background):
