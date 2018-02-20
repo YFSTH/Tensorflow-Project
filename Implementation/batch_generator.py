@@ -4,8 +4,7 @@ import numpy as np
 
 
 class MNISTCollage:
-    """ Helper class for initializing MNIST Collage data set
-    """
+    """ Helper class for initializing MNIST Collage data set """
     def __init__(self, directory):
         files = os.listdir(directory)
 
@@ -39,5 +38,5 @@ class MNISTCollage:
         for i in range(len(data) // batch_size):
             first = i * batch_size
             last = first + batch_size
-            yield np.squeeze(data[first:last]), labels[first:last]
+            yield data[first:last], labels[first:last]
 

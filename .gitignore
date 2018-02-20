@@ -3,3 +3,4 @@ __pycache__
 .idea
 /Implementation/datasets
 /Implementation/summaries
+/Implementation/vgg16/vgg16.npy

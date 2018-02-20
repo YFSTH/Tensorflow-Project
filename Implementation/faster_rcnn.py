@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from batch_generator import MNISTCollage
+from vgg16.vgg16 import VGG16
 
 
 def create_graph():
@@ -17,14 +18,17 @@ if __name__ == "__main__":
     # load input data
     mnist = MNISTCollage("datasets")
     
-    # load pre-trained ImageNet
-    create_graph()
+    # load pre-trained VGG16 net
+    #create_graph()
+    inputs = tf.placeholder(tf.float32, [1, 128, 128, 3])
+    graph = VGG16()
+    graph.build(inputs)
 
     # read out last pooling layer
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
         for image, label in mnist.get_batch(mnist.train_data, mnist.train_labels, 1):
-            #pool_tensor = sess.graph.get_tensor_by_name('mi#xed_10/joi')
-            #output = sess.run(pool_tensor, feed_dict={'Cast:0': image})
-            #output = np.squeeze(output)
-            #print(output) # --> (1,71,71,192)
-            print([n.name for n in tf.all_variables()])#get_default_graph()#.get_operations()])#as_graph_def().node])
+            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+            output = sess.run(result_tensor, feed_dict={inputs: image})
+            print(output.shape)
