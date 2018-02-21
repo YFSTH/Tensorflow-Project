@@ -16,8 +16,6 @@ def get_mnist():
     test_labels = mnist.test.labels
     return train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels
 
-train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
-
 def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_imgs=3, replacement=True,
                     allow_overhang=True, background='black',
                     min_scaling=0.5, max_scaling=1.5, scaling_steps=2,
@@ -40,156 +38,169 @@ def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_im
     import numpy as np
     import os
 
-    # get raw mnist images and labels
-    train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
+    # Check whether collages already exist if that is the case do nothing
+    collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)
+    targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)
+    files = os.listdir('./data_generation')
+    existence = False
+    for f in files:
+        if collages_filename in f or targets_filename in f:
+            existence = True
+    if existence == False:
 
-    rnd_indxs = np.random.choice(np.arange(0,len(train_imgs)), 15000, replace=False)
-    train_imgs_selection = train_imgs[rnd_indxs]
-    train_labels_selection = train_labels[rnd_indxs]
+        # get raw mnist images and labels
+        train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
 
-    # get rotated and scaled mnist images
-    mnist_transformed, mnist_labels, angles, scales = [], [], [], []
+        rnd_indxs = np.random.choice(np.arange(0,len(train_imgs)), 15000, replace=False)
+        train_imgs_selection = train_imgs[rnd_indxs]
+        train_labels_selection = train_labels[rnd_indxs]
 
-    for dataset in [(valid_imgs,'validation', valid_labels), (train_imgs_selection,'training', train_labels_selection),(test_imgs,'test', test_labels)]:
-        transformed, labels, angles_, scales_ = augment_mnist(dataset[0], dataset[1], dataset[2], counterclock_angle=counterclock_angle, clockwise_angle=clockwise_angle,
-                                                      rotation_steps=rotation_steps, min_scaling=min_scaling, max_scaling=max_scaling, scaling_steps=scaling_steps)
-        mnist_transformed.append(transformed)
-        angles.append(angles_)
-        scales.append(scales_)
-        mnist_labels.append(labels)
+        # get rotated and scaled mnist images
+        mnist_transformed, mnist_labels, angles, scales = [], [], [], []
 
-    collages = [[], [], []]
-    targets =  [[], [], []]
+        for dataset in [(valid_imgs,'validation', valid_labels), (train_imgs_selection,'training', train_labels_selection),(test_imgs,'test', test_labels)]:
+            transformed, labels, angles_, scales_ = augment_mnist(dataset[0], dataset[1], dataset[2], counterclock_angle=counterclock_angle, clockwise_angle=clockwise_angle,
+                                                          rotation_steps=rotation_steps, min_scaling=min_scaling, max_scaling=max_scaling, scaling_steps=scaling_steps)
+            mnist_transformed.append(transformed)
+            angles.append(angles_)
+            scales.append(scales_)
+            mnist_labels.append(labels)
 
-    for dataset in enumerate(mnist_transformed):
-        ds_indx = dataset[0]
+        collages = [[], [], []]
+        targets =  [[], [], []]
 
-        for c in range(num_collages):
-            collage_frame = create_frame(collage_size, background)
+        for dataset in enumerate(mnist_transformed):
+            ds_indx = dataset[0]
+
+            for c in range(num_collages):
+                collage_frame = create_frame(collage_size, background)
 
 
-            # randomly choose random number of mnist images for collage
-            num_mnist_imgs = np.random.randint(min_num_imgs, max_num_imgs+1)
-            rand_indxs = list(np.random.choice(np.arange(0, len(dataset[1])), num_mnist_imgs, replace=replacement))
-            drawn_imgs = dataset[1][rand_indxs]
-            drawn_angles = angles[dataset[0]][rand_indxs]
-            drawn_scales = scales[dataset[0]][rand_indxs]
-            drawn_targets = mnist_labels[dataset[0]][rand_indxs]
+                # randomly choose random number of mnist images for collage
+                num_mnist_imgs = np.random.randint(min_num_imgs, max_num_imgs+1)
+                rand_indxs = list(np.random.choice(np.arange(0, len(dataset[1])), num_mnist_imgs, replace=replacement))
+                drawn_imgs = dataset[1][rand_indxs]
+                drawn_angles = angles[dataset[0]][rand_indxs]
+                drawn_scales = scales[dataset[0]][rand_indxs]
+                drawn_targets = mnist_labels[dataset[0]][rand_indxs]
 
-            # add label list for every collage that is created
-            targets[ds_indx].append([])
+                # add label list for every collage that is created
+                targets[ds_indx].append([])
 
-            # randomly place them in frame according to specifications
-            for img in enumerate(drawn_imgs):
+                # randomly place them in frame according to specifications
+                for img in enumerate(drawn_imgs):
 
-                # only implemented for square shaped images
-                assert(img[1].shape[0] == img[1].shape[1])
+                    # only implemented for square shaped images
+                    assert(img[1].shape[0] == img[1].shape[1])
 
-                # index if full image can be added to collage
-                i1, i2, j1, j2 = 0, img[1].shape[0], 0, img[1].shape[1]
+                    # index if full image can be added to collage
+                    i1, i2, j1, j2 = 0, img[1].shape[0], 0, img[1].shape[1]
 
-                if allow_overhang:
-                    # get mnist image shape
-                    n, m = img[1].shape
+                    if allow_overhang:
+                        # get mnist image shape
+                        n, m = img[1].shape
 
-                    # half width/height of image (images are square)
-                    size = int(np.floor(img[1].shape[0] / 2))
+                        # half width/height of image (images are square)
+                        size = int(np.floor(img[1].shape[0] / 2))
 
-                    # randomly draw indices from the whole collage frame
-                    xindx = np.random.randint(0, collage_size)
-                    yindx = np.random.randint(0, collage_size)
+                        # randomly draw indices from the whole collage frame
+                        xindx = np.random.randint(0, collage_size)
+                        yindx = np.random.randint(0, collage_size)
 
-                    if n % 2 == 0:
-                        tmp_i1 = xindx - (size - 1)
-                        tmp_i2 = (collage_frame.shape[0] - 1) - (xindx + size)
-                        tmp_j1 = yindx - (size - 1)
-                        tmp_j2 = (collage_frame.shape[1] - 1) - (yindx + size)
+                        if n % 2 == 0:
+                            tmp_i1 = xindx - (size - 1)
+                            tmp_i2 = (collage_frame.shape[0] - 1) - (xindx + size)
+                            tmp_j1 = yindx - (size - 1)
+                            tmp_j2 = (collage_frame.shape[1] - 1) - (yindx + size)
+                        else:
+                            tmp_i1 = xindx - size
+                            tmp_i2 = (collage_frame.shape[0] - 1) - (xindx + size)
+                            tmp_j1 = yindx - size
+                            tmp_j2 = (collage_frame.shape[1] - 1) - (yindx + size)
+
+                        # shrink ranges of indices of mnist image (so only the part of the mnist image is used, which does
+                        # not overhang)
+                        if tmp_i1 < 0:
+                            i1 = i1 + abs(tmp_i1)
+                        if tmp_i2 < 0:
+                            i2 = (img[1].shape[0]) - abs(tmp_i2)
+                        if tmp_j1 < 0:
+                            j1 = j1 + abs(tmp_j1)
+                        if tmp_j2 < 0:
+                            j2 = (img[1].shape[1]) - abs(tmp_j2)
+
+                        # get to-be-used subarray of collage frame
+                        if n % 2 == 0:
+                            x1 = xindx - (size - 1) + abs(tmp_i1) * (tmp_i1<0)
+                            x2 = xindx + size + 1 - abs(tmp_i2) * (tmp_i2<0)
+                            y1 = yindx - (size - 1) + abs(tmp_j1) * (tmp_j1 < 0)
+                            y2 = yindx + size + 1 - abs(tmp_j2) * (tmp_j2 < 0)
+                        else:
+                            x1 = xindx - (size) + abs(tmp_i1) * (tmp_i1 < 0)
+                            x2 = xindx + size + 1 - abs(tmp_i2) * (tmp_i2 < 0)
+                            y1 = yindx - (size) + abs(tmp_j1) * (tmp_j1 < 0)
+                            y2 = yindx + size + 1 - abs(tmp_j2) * (tmp_j2 < 0)
+
+                        # draw mnist image onto collage frame
+                        collage_frame[x1:x2,y1:y2] += img[1][i1:i2,j1:j2]
+
+
+                        # prepare label including number, position x, y and width and height
+                        #number = labels[]
+                        x = xindx
+                        y = yindx
+                        h = i2 - i1 + 1
+                        w = j2 - j1 + 1
+
                     else:
-                        tmp_i1 = xindx - size
-                        tmp_i2 = (collage_frame.shape[0] - 1) - (xindx + size)
-                        tmp_j1 = yindx - size
-                        tmp_j2 = (collage_frame.shape[1] - 1) - (yindx + size)
+                        # determine the allowed placement positions for the first and second dimension (in contrast to the above
+                        # case does (xindx,yindx) represent the upper-left pixel where the mnist image will be drawn onto
+                        # the collage
+                        s = img[1].shape[0]
+                        xmax = collage_size - s
+                        ymax = collage_size - s
 
-                    # shrink ranges of indices of mnist image (so only the part of the mnist image is used, which does
-                    # not overhang)
-                    if tmp_i1 < 0:
-                        i1 = i1 + abs(tmp_i1)
-                    if tmp_i2 < 0:
-                        i2 = (img[1].shape[0]) - abs(tmp_i2)
-                    if tmp_j1 < 0:
-                        j1 = j1 + abs(tmp_j1)
-                    if tmp_j2 < 0:
-                        j2 = (img[1].shape[1]) - abs(tmp_j2)
+                        # randomly draw indices from the whole collage frame
+                        xindx = np.random.randint(0, xmax + 1)
+                        yindx = np.random.randint(0, ymax + 1)
 
-                    # get to-be-used subarray of collage frame
-                    if n % 2 == 0:
-                        x1 = xindx - (size - 1) + abs(tmp_i1) * (tmp_i1<0)
-                        x2 = xindx + size + 1 - abs(tmp_i2) * (tmp_i2<0)
-                        y1 = yindx - (size - 1) + abs(tmp_j1) * (tmp_j1 < 0)
-                        y2 = yindx + size + 1 - abs(tmp_j2) * (tmp_j2 < 0)
-                    else:
-                        x1 = xindx - (size) + abs(tmp_i1) * (tmp_i1 < 0)
-                        x2 = xindx + size + 1 - abs(tmp_i2) * (tmp_i2 < 0)
-                        y1 = yindx - (size) + abs(tmp_j1) * (tmp_j1 < 0)
-                        y2 = yindx + size + 1 - abs(tmp_j2) * (tmp_j2 < 0)
+                        # draw mnist image onto collage frame
+                        collage_frame[xindx:xindx+s,yindx:yindx+s] += img[1]
 
-                    # draw mnist image onto collage frame
-                    collage_frame[x1:x2,y1:y2] += img[1][i1:i2,j1:j2]
+                        # prepare label including number, position x, y and width and height
+                        x = int(xindx+(s/2))
+                        y = int(yindx+(s/2))
+                        h, w = s, s
 
+                    # for each added mnist image add list of mnist number, position and height and width to the list
+                    # for the targets of the respective collage
+                    targets[ds_indx][c].append([drawn_targets[img[0]], x, y, h, w, drawn_angles[img[0]], drawn_scales[img[0]]])
 
-                    # prepare label including number, position x, y and width and height
-                    #number = labels[]
-                    x = xindx
-                    y = yindx
-                    h = i2 - i1 + 1
-                    w = j2 - j1 + 1
+                collages[ds_indx].append(collage_frame)
 
-                else:
-                    # determine the allowed placement positions for the first and second dimension (in contrast to the above
-                    # case does (xindx,yindx) represent the upper-left pixel where the mnist image will be drawn onto
-                    # the collage
-                    s = img[1].shape[0]
-                    xmax = collage_size - s
-                    ymax = collage_size - s
+                # if target list is to short fill it up with placeholder tokens
+                while len(targets[ds_indx][c]) < max_num_imgs:
+                    targets[ds_indx][c].append([-9, -9, -9, -9, -9, -9, -9])
 
-                    # randomly draw indices from the whole collage frame
-                    xindx = np.random.randint(0, xmax + 1)
-                    yindx = np.random.randint(0, ymax + 1)
+                # For debugging (examine collages and associated labels):
+                #plt.imshow(collage_frame)
+                #plt.show()
+                #print(targets[ds_indx][c])
 
-                    # draw mnist image onto collage frame
-                    collage_frame[xindx:xindx+s,yindx:yindx+s] += img[1]
+            if dataset[0] == 0:
+                    name = 'train'
+            if dataset[0] == 1:
+                name = 'test'
+            if dataset[0] == 2:
+                name = 'valid'
+            collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
+            targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
 
-                    # prepare label including number, position x, y and width and height
-                    x = int(xindx+(s/2))
-                    y = int(yindx+(s/2))
-                    h, w = s, s
+            import pickle
 
-                # for each added mnist image add list of mnist number, position and height and width to the list
-                # for the targets of the respective collage
-                targets[ds_indx][c].append([drawn_targets[img[0]], x, y, h, w, drawn_angles[img[0]], drawn_scales[img[0]]])
-
-            collages[ds_indx].append(collage_frame)
-
-            #plt.imshow(collage_frame)
-            #plt.show()
-            #print(targets[ds_indx][c])
-
-        import pickle
-        if dataset[0] == 0:
-            name = 'train'
-        if dataset[0] == 1:
-            name = 'test'
-        if dataset[0] == 2:
-            name = 'valid'
-
-        collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
-        targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
-        existence = all([os.path.isfile(collages_filename), os.path.isfile(targets_filename)])
-
-        if existence == False:
-            with open(collages_filename, 'wb') as f:
+            with open('data_generation/'+collages_filename, 'wb') as f:
                     pickle.dump(collages[dataset[0]], f)
-            with open(targets_filename, 'wb') as f:
+            with open('data_generation/'+targets_filename, 'wb') as f:
                     pickle.dump(targets[dataset[0]], f)
 
 
@@ -260,24 +271,24 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
             print(i1,'/',imgs.shape[0])
 
         # save dataset to disk
-        with open(file1_name, 'wb') as f:
+        with open('data_generation/'+file1_name, 'wb') as f:
             pickle.dump(augmented_imgs, f)
-        with open(file2_name, 'wb') as f:
+        with open('data_generation/'+file2_name, 'wb') as f:
             pickle.dump(angles, f)
-        with open(file3_name, 'wb') as f:
+        with open('data_generation/'+file3_name, 'wb') as f:
             pickle.dump(scales, f)
-        with open(file4_name, 'wb') as f:
+        with open('data_generation/'+file4_name, 'wb') as f:
             pickle.dump(labels, f)
     else:
         # load already existing data set
         import pickle
-        with open(file1_name, 'rb') as file:
+        with open('data_generation/'+file1_name, 'rb') as file:
             augmented_imgs = pickle.load(file)
-        with open(file2_name, 'rb') as file:
+        with open('data_generation/'+file2_name, 'rb') as file:
             angles = pickle.load(file)
-        with open(file3_name, 'rb') as file:
+        with open('data_generation/'+file3_name, 'rb') as file:
             scales = pickle.load(file)
-        with open(file4_name, 'rb') as file:
+        with open('data_generation/'+file4_name, 'rb') as file:
             labels = pickle.load(file)
     #for i in range(len(augmented_imgs)): plt.imshow(augmented_imgs[i]);plt.show();print(labels[i])
     return np.array(augmented_imgs), np.array(labels), np.array(angles), np.array(scales)

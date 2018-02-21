@@ -28,7 +28,7 @@ class MNISTCollage:
                 #self.test_data = np.repeat(self.test_data, 3, axis=3)
             if "test_targets" in filename:
                 self.test_labels = self.load_data(os.path.join(directory, filename))
-    
+
     def load_data(self, path):
         with open(path, 'rb') as file:
             data = pickle.load(file)
@@ -36,7 +36,7 @@ class MNISTCollage:
 
     def get_batch(self, batch_size, type='training'):
         # select specified data set
-        if type == 'training:':
+        if type == 'training':
             data = self.train_data
             labels = self.train_labels
         elif type == 'validation':
@@ -50,5 +50,6 @@ class MNISTCollage:
         for i in range(len(data) // batch_size):
             first = i * batch_size
             last = first + batch_size
-            yield data[first:last], labels[first:last]
+            yield np.array(data[first:last]), np.array(labels[first:last])
+            # data: (num collages, height, width), labels: (num collages, num mnist imgs, num sublabels)
 

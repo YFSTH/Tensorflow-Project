@@ -16,7 +16,6 @@ class VGG16:
             path = os.path.join(path, "vgg16.npy")
             vgg16_npy_path = path
             print(path)
-
         self.data_dict = np.load(vgg16_npy_path, encoding='latin1').item()
         print("npy file loaded")
 
@@ -79,6 +78,8 @@ class VGG16:
         """
         self.data_dict = None
         print(("build model finished: %ds" % (time.time() - start_time)))
+        #self.saver = tf.train.Saver()
+
 
     def avg_pool(self, bottom, name):
         return tf.nn.avg_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
