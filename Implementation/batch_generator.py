@@ -28,14 +28,7 @@ class MNISTCollage:
                 #self.test_data = np.repeat(self.test_data, 3, axis=3)
             if "test_targets" in filename:
                 self.test_labels = self.load_data(os.path.join(directory, filename))
-
-        import matplotlib.pyplot as plt
-        for i in range(15):
-            plt.imshow(self.train_data[i])
-            plt.show()
-            print(self.train_labels[i])
-
-
+    
     def load_data(self, path):
         with open(path, 'rb') as file:
             data = pickle.load(file)
