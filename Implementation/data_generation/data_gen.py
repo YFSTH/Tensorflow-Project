@@ -18,10 +18,10 @@ def get_mnist():
 
 train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
 
-def create_collages(num_collages=1000, collage_size=128, min_num_imgs=1, max_num_imgs=1, replacement=True,
-                    allow_overhang=False, background='black',
-                    min_scaling=0.5, max_scaling=1.5, scaling_steps=3,
-                    counterclock_angle=0, clockwise_angle=0, rotation_steps=1):
+def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_imgs=3, replacement=True,
+                    allow_overhang=True, background='black',
+                    min_scaling=0.5, max_scaling=1.5, scaling_steps=2,
+                    counterclock_angle=0, clockwise_angle=0, rotation_steps=2):
     """
     Creates images (collages) containing a certain number of mnist images which exhibit a specified overlap.
     :param imgs: mnist train, validation xor test set
@@ -38,6 +38,7 @@ def create_collages(num_collages=1000, collage_size=128, min_num_imgs=1, max_num
              characterized by: {'target_numbers': [t1,...], 'target_positions': [(x1,y1),...]}
     """
     import numpy as np
+    import os
 
     # get raw mnist images and labels
     train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels = get_mnist()
@@ -180,14 +181,16 @@ def create_collages(num_collages=1000, collage_size=128, min_num_imgs=1, max_num
             name = 'test'
         if dataset[0] == 2:
             name = 'valid'
-        import pdb
-        pdb.set_trace()
+
         collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'collages.pkl'
         targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)+'_'+name+'_'+'targets.pkl'
-        with open(collages_filename, 'wb') as f:
-                pickle.dump(collages[dataset[0]], f)
-        with open(targets_filename, 'wb') as f:
-                pickle.dump(targets[dataset[0]], f)
+        existence = all([os.path.isfile(collages_filename), os.path.isfile(targets_filename)])
+
+        if existence == False:
+            with open(collages_filename, 'wb') as f:
+                    pickle.dump(collages[dataset[0]], f)
+            with open(targets_filename, 'wb') as f:
+                    pickle.dump(targets[dataset[0]], f)
 
 
 def create_frame(frame_size, background):
