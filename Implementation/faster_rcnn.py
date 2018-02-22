@@ -4,7 +4,8 @@
 
 
 # Import packages
-from anchor_tensor_generation.create_anchor_tensors import *
+from anchor_generation.create_anchor_tensors import *
+from anchor_evaluation.anchor_evaluation import *
 import os
 import numpy as np
 import tensorflow as tf
@@ -28,12 +29,14 @@ SCALING_STEPS = 2
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 2
-BATCH_SIZE = 1
+BATCH_SIZE = 5
 IMG_SIZE = 128
-FM_SIZE = 8
+VGG_FM_SIZE = 8
+VGG_FM_NUM = 512
 ANCHORS_SCALES = [64, 32, 16]
 ANCHORS_RATIOS = [2, 1, 0.5]
 NUM_ANCHORS = 9
+EPOCHS_TRAINSTEP1 = 2
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -43,19 +46,36 @@ create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_im
 
 # Create input batch generator
 Batcher = MNISTCollage('./data_generation')
+train_labels = Batcher.train_labels
+valid_labels = Batcher.valid_labels
+test_labels  = Batcher.test_labels
 
 # For debugging: Examine image and labels of batches
 #for x,y in Batcher.get_batch(4):
 #    pdb.set_trace()
 
 # Create anchor tensor
-anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
+
+# TODO: Change implementation of anchors to object oriented !
+
+anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
 # shape: 4D, (batchsize, num_anchors*4, feature map height, feature map width)
 # Note:
 # x-positions of anchors in image are saved in the first 9 <third dim, fourth dim> for each image (<first dim>)
 # y-"                                            " second 9 "                    "
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
+
+# Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
+train_anchors_eval = anchors_eval(anchors, train_labels)
+valid_anchors_eval = anchors_eval(anchors, valid_labels)
+test_anchors_eval  = anchors_eval(anchors, test_labels)
+# each of the obtained variables should be of shape (num img, num !!!! VGG_FM_SIZE, VGG_FM_SIZE, 2), whereas the
+# first entry of the fourth dimension indicates the anchor evaluation (positive=1, neural=0, negative=-1)
+# and the second the ground truth box number with the highest Intersection-Over-Union with the respective
+# anchor
+
+
 
 #pdb.set_trace()
 
@@ -72,44 +92,53 @@ anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, FM_SIZE, ANCHO
 #       tf.import_graph_def(graph_def, name='')
 
 
-### VGG16
-
-#with tf.name_scope('VGG16'):
-#    pass
-#
-#
-
 ### Region Proposal Network RPN
 
-# with tf.name_scope('RPN'):
-#     X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3], name='input_placeholder')
-#     Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
-#     # TODO: Might be sufficient to just hand over the classes of the single mnist images
-#     values_anchors = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, FM_SIZE, FM_SIZE])
-#     values_trueboxes = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, FM_SIZE, FM_SIZE])
-#
-#     with tf.name_scope('pre_heads_layers'):
-#         prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
-#
-#     with tf.name_scope('regression_head'):
-#         values_predicted = convolutional(prehead_conv, [1, 1, 512, 32], 1, True)
-#         # have (N,NUM_ANCHORS*4,W,H)
-#
-#
-#         #conv1_transposed = tf.transpose(conv1, [0,2,3,1])
-#         #N, W, H, K = tf.shape(conv1_transposed)
-#         #conv1_reshaped = tf.reshape(conv1_transposed, [int((N*W*H*K)/4), 4])
-#         #prediction = 0
-#
-#     with tf.name_scope('classification_head'):
-#         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, 32], 1, True, tf.nn.relu)
-#
-#     with tf.name_scope('costs_and_optimization'):
-#         pass
-#
-#
-# with tf.name_scope('Fast_RCCN'):
-#     pass
+with tf.variable_scope('RPN'):
+    X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM], name='input_placeholder')
+    Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
+    # TODO: Might be sufficient to just hand over the classes of the single mnist images
+    values_anchors = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+    values_trueboxes = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+
+    with tf.variable_scope('pre_heads_layers'):
+        prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
+        predicted_x = prehead_conv[:,:,:,0:9]
+        predicted_y = prehead_conv[:,:,:,9:18]
+        predicted_w = prehead_conv[:,:,:,18:27]
+        predicted_h = prehead_conv[:,:,:,27:36]
+        anchors_x = values_anchors[:,:,:,0:9]
+        anchors_y = values_anchors[:,:,:,9:18]
+        anchors_w = values_anchors[:,:,:,18:27]
+        anchors_h = values_anchors[:,:,:,27:36]
+        t_predicted_x = tf.divide(tf.subtract(predicted_x, anchors_x), anchors_w)
+        t_predicted_y = tf.divide(tf.subtract(predicted_y, anchors_y), anchors_h)
+        t_predicted_w = tf.log(tf.divide(predicted_w, anchors_w))
+        t_predicted_h = tf.log(tf.divide(predicted_h, anchors_h))
+        t_target_x = tf.divide(tf.subtract(true_x, anchors_x), anchors_w)
+        t_target_y = tf.divide(tf.subtract(true_y, anchors_y), anchors_h)
+        t_target_w = tf.log(tf.divide(true_w, anchors_w))
+        t_target_h = tf.log(tf.divide(true_h, anchors_h))
+
+    with tf.variable_scope('regression_head'):
+        values_predicted = convolutional(prehead_conv, [1, 1, 512, 36], 1, True)
+        # have (N,NUM_ANCHORS*4,W,H)
+
+
+        #conv1_transposed = tf.transpose(conv1, [0,2,3,1])
+        #N, W, H, K = tf.shape(conv1_transposed)
+        #conv1_reshaped = tf.reshape(conv1_transposed, [int((N*W*H*K)/4), 4])
+        #prediction = 0
+
+    with tf.variable_scope('classification_head'):
+        clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, 32], 1, True, tf.nn.relu)
+
+    with tf.variable_scope('costs_and_optimization'):
+        pass
+
+
+with tf.name_scope('Fast_RCCN'):
+    pass
 
 
 
@@ -118,43 +147,49 @@ anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, FM_SIZE, ANCHO
 
 if __name__ == "__main__":
 
-    # load input data
-    mnist = MNISTCollage("datasets")
-    
-    # load pre-trained VGG16 net
-    #create_graph()
-    # TODO: Relocate this to the start of the DFG?
+    # Load pretrained VGG16 and get handle on input placeholder
     inputs = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
     vgg16 = VGG16()
     vgg16.build(inputs)
 
     # read out last pooling layer
     with tf.Session() as sess:
+
         sess.run(tf.global_variables_initializer())
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
-        for X_batch, Y_batch in Batcher.get_batch(BATCH_SIZE):
-            # X_batch will be list
+        for epoch in range(EPOCHS_TRAINSTEP1):
+
+            for X_batch, Y_batch in Batcher.get_batch(BATCH_SIZE):
+
+                result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+                vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
+                #print(vgg16_conv5_3_relu.shape)
+                # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
+
+                _ = sess.run([predicted_h], feed_dict={X: vgg16_conv5_3_relu,
+                                                            Y: Y_batch})
+                print(_[0].shape)
+
+                # TODO: Create ground truth boxregression tensor (here, after batching): (BATCHSIZE, NUM_ANCHORS*4, W, H)
+                # TODO: ... how to implement it? As a sparse tensor? Alternatives?
+                # 1. For every image positive, neutral and negative anchors must be identified
+                # 2. For the positive anchors strongest related ground truth box (coordinates) must be
+                #    determined
+                #    -> Idea: Can be done BEFORE DFG / TF
+                # 3. Regression loss is calculated only between positive anchors and strongest related
+                #    ground truth box AND ADDITIONALLY A SUBSAMPLE OF THE ANCHORS IS DRAWN, SEE PAPER
+                #    -> Tensor approach can be applied, but negative anchor loss must be zero weighted
+                #       or better: not computed at all
+                # 4. NMS etc. (, filtering out too small boxes, selecting top N boxes) seem to come
+                #    after bbox regression and classification
 
 
-            # TODO: Make collage batches be of shape (BATCH_SIZE, W, H, 3)
+                # TODO: Create predicted boxregression tensor (inside the graph?)
 
+                #tmp = sess.run([prehead_conv], feed_dict={X: X_batch,
+                #                                    Y: Y_batch,
+                #                                    values_anchors: anchors,
+                #                                    })
+                #print(tmp)
 
-            # TODO: Let imgs run through VGG and input VGG-output to RPN
-
-            # TODO: Create ground truth boxregression tensor (here, after batching): (BATCHSIZE, NUM_ANCHORS*4, W, H)
-            # TODO: ... how to implement it? As a sparse tensor? Alternatives?
-
-            # TODO: Create predicted boxregression tensor (inside the graph?)
-
-            #sess.run([prehead_conv], feed_dict={X: X_batch,
-            #                                    Y: Y_batch,
-            #                                    values_anchors: anchors,
-            #                                    })
-            pass
-
-
-        for image, label in Batcher.get_batch(1):
-            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-            vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
-            print(vgg16_conv5_3_relu.shape)
