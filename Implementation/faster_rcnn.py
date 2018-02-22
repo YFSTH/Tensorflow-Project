@@ -28,29 +28,37 @@ SCALING_STEPS = 2
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 2
-BATCH_SIZE = 1
+BATCH_SIZE = 2
 IMG_SIZE = 128
 FM_SIZE = 8
 ANCHORS_SCALES = [64, 32, 16]
 ANCHORS_RATIOS = [2, 1, 0.5]
 NUM_ANCHORS = 9
 
-# Generate images xor load them if they already exist
+# Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
                 max_num_imgs=MAX_NUM_IMGS, replacement=REPLACEMENT, allow_overhang=ALLOW_OVERHANG,
                 background=BACKGROUND, min_scaling=MIN_SCALING, max_scaling=MAX_SCALING, scaling_steps=SCALING_STEPS,
                 counterclock_angle=COUNTERCLOCK_ANGLE, clockwise_angle=CLOCKWISE_ANGLE, rotation_steps=ROTATION_STEPS)
 
-# Import input batch generator
+# Create input batch generator
 Batcher = MNISTCollage('./data_generation')
 
 # For debugging: Examine image and labels of batches
 #for x,y in Batcher.get_batch(4):
 #    pdb.set_trace()
 
-# Import anchor tensors
-anchors_tensor = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
-# shape: (batchsize, num_anchors*4, feature map height, feature map width)
+# Create anchor tensor
+anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
+# shape: 4D, (batchsize, num_anchors*4, feature map height, feature map width)
+# Note:
+# x-positions of anchors in image are saved in the first 9 <third dim, fourth dim> for each image (<first dim>)
+# y-"                                            " second 9 "                    "
+# width "                                        " third 9 "                     "
+# height "                                       " fourth "                      "
+
+#pdb.set_trace()
+
 
 
 ### Data Flow Graph Construction Phase ################################################################################
@@ -71,7 +79,7 @@ with tf.name_scope('RPN'):
     Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
     # TODO: Might be sufficient to just hand over the classes of the single mnist images
     values_anchors = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, FM_SIZE, FM_SIZE])
-    values_truth = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, FM_SIZE, FM_SIZE])
+    values_trueboxes = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, FM_SIZE, FM_SIZE])
 
     with tf.name_scope('pre_heads_layers'):
         prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
@@ -91,6 +99,10 @@ with tf.name_scope('RPN'):
 
     with tf.name_scope('costs_and_optimization'):
         pass
+
+
+with tf.name_scope('Fast_RCCN'):
+    pass
 
 
 
@@ -115,13 +127,16 @@ if __name__ == "__main__":
 
         for X_batch, Y_batch in Batcher.get_batch(BATCH_SIZE):
             # X_batch will be list
+            # TODO: Let imgs run through VGG and input VGG-output to RPN
 
-            # TODO: Create ground truth boxregression tensor (here, after batching)
-            # TODO: Create predcited boxregression tensor (inside the graph?)
+            # TODO: Create ground truth boxregression tensor (here, after batching): (BATCHSIZE, NUM_ANCHORS*4, W, H)
+            # TODO: ... how to implement it? As a sparse tensor? Alternatives?
+
+            # TODO: Create predicted boxregression tensor (inside the graph?)
 
             sess.run([prehead_conv], feed_dict={X: X_batch,
                                                 Y: Y_batch,
-                                                values_anchors: anchors_tensor,
+                                                values_anchors: anchors,
                                                 })
 
             pass
