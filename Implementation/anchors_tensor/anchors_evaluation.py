@@ -59,6 +59,8 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
         for anchor in anchor_objects:
             for box in ground_truth_boxes:
                 anchor.append_ground_truth_box(box)
+                for a in anchor_objects:
+                    a.evaluate_anchor()
 
 
         gtt, slt = create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index)
@@ -71,6 +73,8 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
         # image, whereas 'type' is the positive xor neutral xor negative evaluation of the tensor and 'class' the mnist
         # number class
         selection_tensors.append(slt)
+
+        #pdb.set_trace()
 
     return np.array(ground_truth_tensors), np.array(selection_tensors) # should be of shape (NUM_IMAGES, NUM_TENSORS*4, feature map width, feature map height)
 

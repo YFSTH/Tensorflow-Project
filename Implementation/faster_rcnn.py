@@ -16,7 +16,7 @@ import pdb
 from data_generation.data_gen import *
 
 # Set class variables
-NUM_COLLAGES = 5
+NUM_COLLAGES = 100
 COLLAGE_SIZE = 128
 MIN_NUM_IMGS = 1
 MAX_NUM_IMGS = 3
@@ -56,7 +56,7 @@ test_labels  = Batcher.test_labels
 
 # Create anchor tensor
 
-anchors = create_anchors_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
+anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
 # shape: 4D, (batchsize, num_anchors*4, feature map height, feature map width)
 # Note:
 # x-positions of anchors in image are saved in the first 9 <third dim, fourth dim> for each image (<first dim>)
@@ -67,17 +67,24 @@ anchors = create_anchors_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, 
 #pdb.set_trace()
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
-train_anchors_eval = anchors_evaluation(batch_anchor_tensor=anchors, imgs=Batcher.train_data, labels=train_labels)
-valid_anchors_eval = anchors_evaluation(batch_anchor_tensor=anchors, labels=valid_labels)
-test_anchors_eval  = anchors_evaluation(batch_anchor_tensor=anchors, labels=test_labels)
-# each of the obtained variables should be of shape (num img, NUM_ANCHORS, VGG_FM_SIZE, VGG_FM_SIZE, 2), whereas the
-# first entry of the fifth dimension indicates the anchor evaluation (positive=1, neural=0, negative=-1)
-# and the second the ground truth box number with the highest Intersection-Over-Union with the respective
-# anchor
+pdb.set_trace()
+train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
+                                                                       imgs=Batcher.train_data, labels=train_labels)
+valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
+                                                                       imgs=Batcher.valid_data, labels=valid_labels)
+test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
+                                                                       imgs=Batcher.test_data, labels=test_labels)
+# These methods should return two tensors:
+# First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
+# Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS]),
+#                where ANCHOR_TYPE is either positive (=1), negative (=0) or neutral (=-1) and MNIST_CLASS
+#                indicates the mnist number class of the assigned ground truth mnist image xor '-2' if no
+#                ground truth box was assigned
 
 
+# TODO: Filtering and NMS
 
-#pdb.set_trace()
+pdb.set_trace()
 
 
 

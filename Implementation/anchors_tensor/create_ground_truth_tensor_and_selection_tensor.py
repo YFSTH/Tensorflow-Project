@@ -1,6 +1,6 @@
 import pdb
 
-def create_ground_truth_tensor_and_selection_tensor(anchor_objects, objects, num_anchors, fm_w_index, fm_h_index):
+def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index):
     '''
 
     :param anchor_objects:
@@ -19,14 +19,14 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, objects, num
     sel_tensor = np.zeros((num_anchors, fm_w_index, fm_h_index, 2)) - 2
 
     positive_anchors = 0
+    #a_ = []
+
     for a in anchor_objects:
         # get box that was assigned to tensor and its coordinates
 
         box = a.assigned_ground_truth_box
 
-
-        if box != None:
-            positive_anchors += 1
+        if box is not None:
             x = box.x
             y = box.y
             w = box.w
@@ -45,6 +45,8 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, objects, num
             # get and code anchor type (positive xor negative xor neutral) and mnist class of assigned ground truth box
             tmp = a.type
             if tmp == 'positive':
+                positive_anchors += 1
+                #a_.append(a)
                 anchortype = 1
             elif tmp == 'negative':
                 anchortype = 0
@@ -52,9 +54,13 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, objects, num
                 anchortype = -1
             mnist_class = a.assigned_ground_truth_box.label
             sel_tensor[anchor_idx, w_idx, h_idx, 0] = anchortype
-            sel_tensor[anchor_idx, w_idx, h_idx, 0] = mnist_class
+            sel_tensor[anchor_idx, w_idx, h_idx, 1] = mnist_class
 
-    pdb.set_trace()
+            # Testing/debugging purposes:
+            #print(a.assigned_ground_truth_box.anchors[a.assigned_ground_truth_box.ious.index(max(a.assigned_ground_truth_box.ious))].h_idx)
+    # Testing/ debugging purposes:
+    #print(ground_truth_boxes[0].anchors[ground_truth_boxes[0].ious.index(np.max(ground_truth_boxes[0].ious))].type)
+    print('positive anchors:', positive_anchors)
 
     return gtb_tensor, sel_tensor
 
