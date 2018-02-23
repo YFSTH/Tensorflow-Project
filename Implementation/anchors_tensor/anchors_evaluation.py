@@ -12,11 +12,12 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
     :return: 5D tensor of shape (number of img, num anchor, feature map width, feature map height, 2), whereas the
              feature map is the feature map of the pretrained convolutional network used for the Faster R-CNN; the
              first entry of the fifth dimension indicates the anchor evaluation (positive=1, neural=0, negative=-1)
-             and the second the number of the optimal ground truth box
+             and the second the number of the optimal ground truth box +++ ground truth tensor
     '''
     import numpy as np
     from anchor_and_ground_truth_box.Anchor import Anchor
     from anchor_and_ground_truth_box.GroundTruthBox import GroundTruthBox
+    from anchors_tensor.create_ground_truth_tensor_and_selection_tensor import create_ground_truth_tensor_and_selection_tensor
 
     num_imgs = len(labels)
     fm_w_index, fm_h_index = batch_anchor_tensor.shape[-2], batch_anchor_tensor.shape[-1]
@@ -24,9 +25,8 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
     anchor_tensor = batch_anchor_tensor[0, :, :, :]
     # is of shape (NUM_ANCHORS*4, feature map width, feature map height)
 
-    # Object-oriented approach is used to determine the the appropriate ground truth box the anchor
-    # should transform to (if there is any).
-
+    ground_truth_tensors = []
+    selection_tensors = []
     for collage in range(num_imgs):
 
         # Create list of anchor objects
@@ -38,34 +38,42 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
                     y = anchor_tensor[anchor_index+num_anchors, w_idx, h_idx]
                     w = anchor_tensor[anchor_index+num_anchors*2, w_idx, h_idx]
                     h = anchor_tensor[anchor_index+num_anchors*3, w_idx, h_idx]
-                    anchor_objects.append(Anchor(x, y, w, h, w_idx, h_idx))
+                    anchor_objects.append(Anchor(x, y, w, h, w_idx, h_idx, anchor_index))
 
-        # get labels of specific image
+        # (get labels of specific collage)
         mnist_imgs = labels[collage]
         # for each mnist image in the collage create one ground truth box
         ground_truth_boxes = []
         for mnist_image in enumerate(mnist_imgs):
-            x = mnist_image[1][1]
-            y = mnist_image[1][2]
-            w = mnist_image[1][3]
-            h = mnist_image[1][4]
-            label = mnist_image[1][0]
-            ground_truth_boxes.append(GroundTruthBox(x, y, w, h, label))
+            if mnist_image[1][0] >= 0: # filter out filler (-9,...,-9) labels
+                x = mnist_image[1][1]
+                y = mnist_image[1][2]
+                w = mnist_image[1][3]
+                h = mnist_image[1][4]
+                label = mnist_image[1][0]
+                ground_truth_boxes.append(GroundTruthBox(x, y, w, h, label))
 
-        pdb.set_trace()
-
-        # add ground truth boxes to anchors
-
-        # create one ground_truth_tensor per collage image
-
-    return # ground_truth_tensor_list
-
-
+        # evaluation (anchor <> ground truth box assignment) takes place inside the Anchor object: object-oriented
+        # approach is used to determine the appropriate ground truth box the anchor should transform to (if there is
+        # any)
+        for anchor in anchor_objects:
+            for box in ground_truth_boxes:
+                anchor.append_ground_truth_box(box)
 
 
+        gtt, slt = create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index)
+
+        # create one ground_truth_tensor with shape (NUM_TENSORS*4, feature map width, feature map height) per collage
+        # image
+        ground_truth_tensors.append(gtt)
+
+        # create one selection tensor with shape (NUM_TENSORS, feature map width, feature map height, [type, class]) per
+        # image, whereas 'type' is the positive xor neutral xor negative evaluation of the tensor and 'class' the mnist
+        # number class
+        selection_tensors.append(slt)
+
+    return np.array(ground_truth_tensors), np.array(selection_tensors) # should be of shape (NUM_IMAGES, NUM_TENSORS*4, feature map width, feature map height)
 
 
-    pdb.set_trace()
-    #
 
-    output_tensor = np.zeros((num_imgs, num_anchors, ))
+
