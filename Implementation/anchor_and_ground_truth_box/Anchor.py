@@ -1,14 +1,17 @@
 class Anchor(object):
 
-    def __init__(self, x, y, w, h):
+    def __init__(self, x, y, w, h, w_idx, h_idx):
         self.x = x
         self.y = y
         self.w = w
         self.h = h
+        # The following two variables will be used later to build a ground truth tensor matching the shape of the
+        # anchor tensor and prediction tensor
+        self.w_idx = w_idx
+        self.h_idx = h_idx
 
         self.groundTruthBoxes = []
         self.intersectionsOfUnions = []
-        self.mnist_classes = []
         self.type = 'negative'
 
     def append_ground_truth_box(self, ground_truth_box):
@@ -16,7 +19,6 @@ class Anchor(object):
         if iou > 0:
             self.intersectionsOfUnions.append(iou)
             self.groundTruthBoxes.append(ground_truth_box)
-            self.append_mnist_class()
         self.evaluate_type()
 
     def calculate_iou(self, ground_truth_box):
@@ -31,7 +33,7 @@ class Anchor(object):
         x2_a = self.x + self.w
         y1_a = self.y - self.h
         y2_a = self.y + self.h
-        _, x_t, y_t, w_t, h_t, _, _ = ground_truth_box
+        x_t, y_t, w_t, h_t = ground_truth_box.x, ground_truth_box.y, ground_truth_box.w, ground_truth_box.h
         x1_t = x_t - w_t
         x2_t = x_t + w_t
         y1_t = y_t - h_t
@@ -50,10 +52,6 @@ class Anchor(object):
 
         # calculate and return intersection over union
         return intersection / (area_a + area_t - intersection)
-
-    def append_mnist_class(self, ground_truth_box):
-        label = ground_truth_box[0]
-        self.mnist_classes.append(label)
 
     def evaluate_type(self):
         if max(self.intersectionsOfUnions) >= 0.7:

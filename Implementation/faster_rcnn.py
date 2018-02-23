@@ -4,8 +4,8 @@
 
 
 # Import packages
-from anchor_generation.create_anchor_tensors import *
-from anchor_evaluation.anchor_evaluation import *
+from anchors_tensor.create_anchors_tensor import *
+from anchors_tensor.anchors_evaluation import *
 import os
 import numpy as np
 import tensorflow as tf
@@ -56,9 +56,7 @@ test_labels  = Batcher.test_labels
 
 # Create anchor tensor
 
-# TODO: Change implementation of anchors to object oriented !
-
-anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
+anchors = create_anchors_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
 # shape: 4D, (batchsize, num_anchors*4, feature map height, feature map width)
 # Note:
 # x-positions of anchors in image are saved in the first 9 <third dim, fourth dim> for each image (<first dim>)
@@ -66,12 +64,14 @@ anchors = create_anchor_tensor(BATCH_SIZE, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, A
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
 
+#pdb.set_trace()
+
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
-train_anchors_eval = anchors_eval(anchors, train_labels)
-valid_anchors_eval = anchors_eval(anchors, valid_labels)
-test_anchors_eval  = anchors_eval(anchors, test_labels)
-# each of the obtained variables should be of shape (num img, num !!!! VGG_FM_SIZE, VGG_FM_SIZE, 2), whereas the
-# first entry of the fourth dimension indicates the anchor evaluation (positive=1, neural=0, negative=-1)
+train_anchors_eval = anchors_evaluation(batch_anchor_tensor=anchors, imgs=Batcher.train_data, labels=train_labels)
+valid_anchors_eval = anchors_evaluation(batch_anchor_tensor=anchors, labels=valid_labels)
+test_anchors_eval  = anchors_evaluation(batch_anchor_tensor=anchors, labels=test_labels)
+# each of the obtained variables should be of shape (num img, NUM_ANCHORS, VGG_FM_SIZE, VGG_FM_SIZE, 2), whereas the
+# first entry of the fifth dimension indicates the anchor evaluation (positive=1, neural=0, negative=-1)
 # and the second the ground truth box number with the highest Intersection-Over-Union with the respective
 # anchor
 

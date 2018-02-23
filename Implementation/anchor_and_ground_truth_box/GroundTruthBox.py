@@ -1,11 +1,12 @@
 class GroundTruthBox:
 
-    def __init__(self, x, y, w, h):
+    def __init__(self, x, y, w, h, label):
         # initially set
         self.x = x
         self.y = y
         self.w = w
         self.h = h
+        self.label = label
         # used by anchor evaluation to assign anchors to ground truth boxes
         self.anchors = []
         self.ious = []

@@ -1,9 +1,6 @@
-def create_anchor_list(batch_size, num_anchors, original_img_size, feature_map_size, anchors_scales, anchors_aspect_ratios):
+def create_anchors_tensor(batch_size, num_anchors, original_img_size, feature_map_size, anchors_scales, anchors_aspect_ratios):
 
     import numpy as np
-    anchors = []
-
-
 
     X, Y = get_anchors_centers(original_img_size, feature_map_size)
 
