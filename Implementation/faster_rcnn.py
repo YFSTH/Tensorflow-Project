@@ -38,6 +38,7 @@ ANCHORS_RATIOS = [1.75, 1, 0.40]
 NUM_ANCHORS = 9
 EPOCHS_TRAINSTEP1 = 2
 LOAD_LAST_ANCHORS = False
+NUM_SELECTED_ANCHORS = 256
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -71,15 +72,18 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                        imgs=Batcher.train_data, labels=train_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                       filename='train_anchors',)
+                                                                       filename='train_anchors',
+                                                                       num_selected=NUM_SELECTED_ANCHORS)
 valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                        imgs=Batcher.valid_data, labels=valid_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                       filename='valid_anchors', )
+                                                                       filename='valid_anchors',
+                                                                       num_selected=NUM_SELECTED_ANCHORS)
 test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                      imgs=Batcher.test_data, labels=test_labels,
                                                                      load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                     filename='test_anchors', )
+                                                                     filename='test_anchors',
+                                                                     num_selected=NUM_SELECTED_ANCHORS)
 # These methods should return two tensors:
 # First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
 # Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS]),
@@ -98,7 +102,11 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 # TODO: Filtering and NMS
 
-# TODO: Save and load tensors instead of recalculating them
+
+# TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
+# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors,
+
+# TODO: Filtering and NMS
 
 pdb.set_trace()
 
