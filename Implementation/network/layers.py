@@ -71,3 +71,6 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
 
     return output
 
+
+def roi_pooling(input, proposals):
+    pass

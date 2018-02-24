@@ -16,8 +16,8 @@ import pdb
 from data_generation.data_gen import *
 
 # Set class variables
-NUM_COLLAGES = 5
-COLLAGE_SIZE = 128
+NUM_COLLAGES = 100
+COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 1
 MAX_NUM_IMGS = 3
 REPLACEMENT = True
@@ -30,8 +30,8 @@ COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 2
 BATCH_SIZE = 5
-IMG_SIZE = 128
-VGG_FM_SIZE = 8
+IMG_SIZE = 256
+VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
 ANCHORS_SCALES = [42, 28, 14]
 ANCHORS_RATIOS = [1.75, 1, 0.40]
@@ -108,7 +108,7 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 # TODO: Filtering and NMS
 
-pdb.set_trace()
+#pdb.set_trace()
 
 
 
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
                 result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                 vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
-                #print(vgg16_conv5_3_relu.shape)
+                print(vgg16_conv5_3_relu.shape)
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 _ = sess.run([predicted_h], feed_dict={X: vgg16_conv5_3_relu,
