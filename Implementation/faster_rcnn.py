@@ -95,7 +95,7 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 # Filter anchors
 
-
+ 
 
 # TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
 # TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors,
