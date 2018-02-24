@@ -4,8 +4,8 @@
 
 
 # Import packages
-from anchors_tensor.create_anchors_tensor import *
-from anchors_tensor.anchors_evaluation import *
+from anchors.create_anchors_tensor import *
+from anchors.anchors_evaluation import *
 import os
 import numpy as np
 import tensorflow as tf
@@ -16,7 +16,7 @@ import pdb
 from data_generation.data_gen import *
 
 # Set class variables
-NUM_COLLAGES = 100
+NUM_COLLAGES = 5
 COLLAGE_SIZE = 128
 MIN_NUM_IMGS = 1
 MAX_NUM_IMGS = 3

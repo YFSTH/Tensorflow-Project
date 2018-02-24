@@ -72,6 +72,7 @@ class Anchor(object):
             return 0
 
     def evaluate_anchor(self):
+
         if len(self.intersectionsOfUnions) is not 0:
 
             upper_threshold = 0.4

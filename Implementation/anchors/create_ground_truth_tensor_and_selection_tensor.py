@@ -24,8 +24,6 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
 
     for a in anchor_objects:
 
-        # TODO: ALSO ANCHORS WITHOUT ASSIGNED BOXES MUST BE COUNTED AS NEGTAIVE
-
         # get box that was assigned to tensor and its coordinates
         box = a.assigned_ground_truth_box
 
@@ -73,11 +71,7 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         sel_tensor[anchor_idx, w_idx, h_idx, 0] = anchortype
         sel_tensor[anchor_idx, w_idx, h_idx, 1] = mnist_class
 
-        # Testing/debugging purposes:
-        #print(a.assigned_ground_truth_box.anchors[a.assigned_ground_truth_box.ious.index(max(a.assigned_ground_truth_box.ious))].h_idx)
-
     # Testing/ debugging purposes:
-    #print(ground_truth_boxes[0].anchors[ground_truth_boxes[0].ious.index(np.max(ground_truth_boxes[0].ious))].type)
     print('positive anchors:', positive_anchors)
     print('negative anchors:', negative_anchors)
     print('neutral anchors:', neutral_anchors)

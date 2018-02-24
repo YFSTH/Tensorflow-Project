@@ -15,9 +15,9 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
              and the second the number of the optimal ground truth box +++ ground truth tensor
     '''
     import numpy as np
-    from anchor_and_ground_truth_box.Anchor import Anchor
-    from anchor_and_ground_truth_box.GroundTruthBox import GroundTruthBox
-    from anchors_tensor.create_ground_truth_tensor_and_selection_tensor import create_ground_truth_tensor_and_selection_tensor
+    from anchors.Anchor import Anchor
+    from anchors.GroundTruthBox import GroundTruthBox
+    from anchors.create_ground_truth_tensor_and_selection_tensor import create_ground_truth_tensor_and_selection_tensor
 
     num_imgs = len(labels)
     fm_w_index, fm_h_index = batch_anchor_tensor.shape[-2], batch_anchor_tensor.shape[-1]
@@ -64,6 +64,8 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
 
 
         gtt, slt = create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index)
+
+        # TODO: Plot collages and anchor and ground truth bounding boxes for testing
 
         # create one ground_truth_tensor with shape (NUM_TENSORS*4, feature map width, feature map height) per collage
         # image
