@@ -1,6 +1,7 @@
 __pycache__
 .directory
+.DS-Store
 .idea
-/Implementation/datasets
+/Implementation/data_generation/*.pkl
 /Implementation/summaries
 /Implementation/vgg16/vgg16.npy
