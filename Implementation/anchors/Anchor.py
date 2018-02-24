@@ -19,8 +19,8 @@ class Anchor(object):
         self.h = h
         # The following two variables will be used later to build a ground truth tensor matching the shape of the
         # anchor tensor and prediction tensor
-        self.w_idx = w_idx
-        self.h_idx = h_idx
+        self.w_idx = h_idx
+        self.h_idx = w_idx
         self.anchor_idx = anchor_idx
 
         self.groundTruthBoxes = []
