@@ -29,8 +29,6 @@ class MNISTCollage:
             if "test_targets" in filename:
                 self.test_labels = self.load_data(os.path.join(directory, filename))
 
-
-
     def load_data(self, path):
         with open(path, 'rb') as file:
             data = pickle.load(file)

@@ -1,4 +1,5 @@
 import pdb
+from anchors.debugging_module import *
 
 def anchors_evaluation(batch_anchor_tensor, imgs, labels):
     '''
@@ -66,6 +67,7 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels):
         gtt, slt = create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index)
 
         # TODO: Plot collages and anchor and ground truth bounding boxes for testing
+        debugging_module(batch_anchor_tensor, imgs[collage], labels[collage], gtt, slt, anchor_objects, ground_truth_boxes)
 
         # create one ground_truth_tensor with shape (NUM_TENSORS*4, feature map width, feature map height) per collage
         # image
