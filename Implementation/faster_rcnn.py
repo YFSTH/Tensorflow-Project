@@ -1,19 +1,19 @@
-
-
 ### Preparation #######################################################################################################
 
-
 # Import packages
-from anchors.create_anchors_tensor import *
-from anchors.anchors_evaluation import *
 import os
+import pdb
+
 import numpy as np
 import tensorflow as tf
-from network.layers import convolutional, fully_connected
+
+from anchors.create_anchors_tensor import *
+from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
-from vgg16.vgg16 import VGG16
-import pdb
 from data_generation.data_gen import *
+from network.layers import convolutional, fully_connected
+from vgg16.vgg16 import VGG16
+
 
 # Set class variables
 NUM_COLLAGES = 100
@@ -39,6 +39,8 @@ NUM_ANCHORS = 9
 EPOCHS_TRAINSTEP1 = 2
 LOAD_LAST_ANCHORS = False
 NUM_SELECTED_ANCHORS = 256
+ROI_FM_SIZE = 8
+NUM_CLASSES = 10
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -47,13 +49,13 @@ create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_im
                 counterclock_angle=COUNTERCLOCK_ANGLE, clockwise_angle=CLOCKWISE_ANGLE, rotation_steps=ROTATION_STEPS)
 
 # Create input batch generator
-Batcher = MNISTCollage('./data_generation')
-train_labels = Batcher.train_labels
-valid_labels = Batcher.valid_labels
-test_labels  = Batcher.test_labels
+batcher = MNISTCollage('./data_generation')
+train_labels = batcher.train_labels
+valid_labels = batcher.valid_labels
+test_labels  = batcher.test_labels
 
 # For debugging: Examine image and labels of batches
-#for x,y in Batcher.get_batch(4):
+#for x,y in batcher.get_batch(4):
 #    pdb.set_trace()
 
 # Create anchor tensor
@@ -70,17 +72,17 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
 train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                       imgs=Batcher.train_data, labels=train_labels,
+                                                                       imgs=batcher.train_data, labels=train_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
                                                                        filename='train_anchors',
                                                                        num_selected=NUM_SELECTED_ANCHORS)
 valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                       imgs=Batcher.valid_data, labels=valid_labels,
+                                                                       imgs=batcher.valid_data, labels=valid_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
                                                                        filename='valid_anchors',
                                                                        num_selected=NUM_SELECTED_ANCHORS)
 test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                     imgs=Batcher.test_data, labels=test_labels,
+                                                                     imgs=batcher.test_data, labels=test_labels,
                                                                      load_last_anchors=LOAD_LAST_ANCHORS,
                                                                      filename='test_anchors',
                                                                      num_selected=NUM_SELECTED_ANCHORS)
@@ -95,7 +97,7 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 # Filter anchors
 
-
+ 
 
 # TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
 # TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors,
@@ -125,7 +127,7 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 ### Region Proposal Network RPN
 
-with tf.variable_scope('RPN'):
+with tf.variable_scope('rpn'):
     X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM], name='input_placeholder')
     Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
     # TODO: Might be sufficient to just hand over the classes of the single mnist images
@@ -168,9 +170,22 @@ with tf.variable_scope('RPN'):
         pass
 
 
-with tf.name_scope('Fast_RCCN'):
-    pass
+with tf.name_scope('fast_rcnn'):
+    x = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_NUM * ROI_FM_SIZE**2])
+    y = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_CLASSES])
 
+    with tf.variable_scope('fc6'):
+        fc6 = fully_connected(x, 4096, False, tf.nn.relu)
+    with tf.variable_scope('fc7'):
+        fc7 = fully_connected(fc6, 4096, False, tf.nn.relu)
+    with tf.variable_scope('cls_fc'):
+        cls_fc = fully_connected(fc7, 10, False, tf.nn.relu)
+    with tf.variable_scope('reg_fc'):
+        reg_fc = fully_connected(fc7, 40, False, tf.nn.relu)
+    with tf.variable_scope('cls_out'):
+        cls_out = fully_connected(cls_fc, 10, False, None)
+        cls_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=cls_fc))
+    # TODO: Implement loss for regression
 
 
 ### Execution Phase ###################################################################################################
@@ -191,7 +206,7 @@ if __name__ == "__main__":
 
         for epoch in range(EPOCHS_TRAINSTEP1):
 
-            for X_batch, Y_batch in Batcher.get_batch(BATCH_SIZE):
+            for X_batch, Y_batch in batcher.get_batch(BATCH_SIZE):
 
                 result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                 vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
