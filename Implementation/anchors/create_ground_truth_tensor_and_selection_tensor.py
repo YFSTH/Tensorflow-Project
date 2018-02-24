@@ -16,7 +16,7 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
     assert (len(anchor_objects) == num_anchors * fm_h_index * fm_w_index)
 
     gtb_tensor = np.zeros((num_anchors*4, fm_w_index, fm_h_index)) - 2
-    sel_tensor = np.zeros((num_anchors, fm_w_index, fm_h_index, 2)) - 2
+    sel_tensor = np.zeros((num_anchors, fm_w_index, fm_h_index, 3)) - 2
 
     positive_anchors = 0
     neutral_anchors = 0
@@ -70,6 +70,7 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         # create selection tensor entry
         sel_tensor[anchor_idx, w_idx, h_idx, 0] = anchortype
         sel_tensor[anchor_idx, w_idx, h_idx, 1] = mnist_class
+        sel_tensor[anchor_idx, w_idx, h_idx, 2] = a.assigned_iou
 
     # Testing/ debugging purposes:
     print('positive anchors:', positive_anchors)

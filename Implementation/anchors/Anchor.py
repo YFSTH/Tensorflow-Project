@@ -26,7 +26,7 @@ class Anchor(object):
         self.groundTruthBoxes = []
         self.intersectionsOfUnions = []
         self.assigned_ground_truth_box = None
-        self.assigned_iou = -1
+        self.assigned_iou = 0
         self.type = 'negative'
 
     def append_ground_truth_box(self, ground_truth_box):

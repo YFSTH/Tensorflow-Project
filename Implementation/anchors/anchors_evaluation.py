@@ -1,7 +1,8 @@
 import pdb
 from anchors.debugging_module import *
+from anchors.anchors_selection import *
 
-def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, filename):
+def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, filename, num_selected):
     '''
     This function discriminates between positive, negative and neutral anchors and additionally
     assigns for each image to each positive anchor the optimal ground truth box (if such a box exists)
@@ -79,14 +80,42 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
 
             #debugging_module(batch_anchor_tensor[collage], imgs[collage], labels[collage], gtt, slt, anchor_objects, ground_truth_boxes)
 
-            # create one ground_truth_tensor with shape (NUM_TENSORS*4, feature map width, feature map height) per collage
-            # image
+            # select a certain amount of anchors (e.g. 256) and try to establish a certain ratio of positive to negative
+            # anchors
+            slt = anchors_selection(gtt, slt, num_selected)
+
+            # testing/debugging:
+            #tmp = slt
+            #num_activated = 0
+            #num_deactivated = 0
+            #num_total = 0
+            #positive_anchors = 0
+            #for a in range(tmp.shape[0]):
+            #    for x in range(tmp.shape[1]):
+            #        for y in range(tmp.shape[2]):
+            #            num_total += 1
+            #            #print(tmp[a, x, y, 0])
+            #            if tmp[a, x, y, 0] != -3:
+            #                num_activated += 1
+            #            else:
+            #                num_deactivated += 1
+            #            if tmp[a, x, y, 0] == 1:
+            #                positive_anchors += 1
+            #print('num total:', num_total, 'num activated:', num_activated, 'num deactivated:', num_deactivated, 'positive anchors:', positive_anchors)
+
             ground_truth_tensors.append(gtt)
 
             # create one selection tensor with shape (NUM_TENSORS, feature map width, feature map height, [type, class]) per
             # image, whereas 'type' is the positive xor neutral xor negative evaluation of the tensor and 'class' the mnist
             # number class
             selection_tensors.append(slt)
+
+            # testing: count number of activated anchors
+
+
+
+
+
 
         with open('anchors/'+filename+'.pkl', 'wb') as file:
             pickle.dump([ground_truth_tensors, selection_tensors], file)
