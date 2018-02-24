@@ -33,7 +33,7 @@ BATCH_SIZE = 5
 IMG_SIZE = 128
 VGG_FM_SIZE = 8
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [64, 32, 16]
+ANCHORS_SCALES = [40, 32, 16]
 ANCHORS_RATIOS = [2, 1, 0.5]
 NUM_ANCHORS = 9
 EPOCHS_TRAINSTEP1 = 2
@@ -67,7 +67,6 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 #pdb.set_trace()
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
-pdb.set_trace()
 train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                        imgs=Batcher.train_data, labels=train_labels)
 valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
@@ -81,8 +80,14 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 #                indicates the mnist number class of the assigned ground truth mnist image xor '-2' if no
 #                ground truth box was assigned
 
+# Estimated required time for a set of 10000 * 3 collages: 33 hours.
+
+# TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
+# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors, 3. errors
+# TODO: ==> PROBABLY ERROR IN IF-ELIF-CHAIN in Anchors.py -> evaluate_anchor()
 
 # TODO: Filtering and NMS
+# TODO: Save and load tensors instead of recalculating them
 
 pdb.set_trace()
 

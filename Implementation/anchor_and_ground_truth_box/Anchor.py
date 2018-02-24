@@ -27,15 +27,14 @@ class Anchor(object):
         self.intersectionsOfUnions = []
         self.assigned_ground_truth_box = None
         self.assigned_iou = -1
-        self.type = 'positive'
+        self.type = 'negative'
 
     def append_ground_truth_box(self, ground_truth_box):
         iou = self.calculate_iou(ground_truth_box)
-        ground_truth_box.add_anchor(self, iou)
         if iou > 0:
+            ground_truth_box.add_anchor(self, iou)
             self.intersectionsOfUnions.append(iou)
             self.groundTruthBoxes.append(ground_truth_box)
-            self.evaluate_anchor()
 
     def calculate_iou(self, ground_truth_box):
         '''
@@ -74,29 +73,39 @@ class Anchor(object):
 
     def evaluate_anchor(self):
         if len(self.intersectionsOfUnions) is not 0:
+
+            upper_threshold = 0.4
+
             for b in self.groundTruthBoxes:
-                if max(b.ious) < 0.70 and self == b.anchors[b.ious.index(max(b.ious))]:
+
+                iuo = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
+                max_iou_box = max(b.ious)
+                max_iou_anchor = max(self.intersectionsOfUnions)
+                best_box = (b == self.groundTruthBoxes[self.intersectionsOfUnions.index(max(self.intersectionsOfUnions))])
+                best_anchor = (self == b.anchors[b.ious.index(max(b.ious))])
+
+                if max_iou_box < upper_threshold and best_anchor:
                     # special case: if a ground truth box exists where no anchor has an IoU >= 0.70 with the box
                     #               and the anchor at hand is from the perspective of the ground truth box the anchor
                     #               with the highest IoU then assign the ground truth box to the anchor at hand
                     self.assigned_ground_truth_box = b
-                    self.assigned_iou = max(b.ious)
+                    self.assigned_iou = iuo
                     self.type = 'positive'
-                elif max(b.ious) > 0.70 and \
-                        b == self.groundTruthBoxes[self.intersectionsOfUnions.index(max(self.intersectionsOfUnions))]:
+
+                elif iuo > upper_threshold and best_box:
                     # if the anchor has an IoU > 0.70 with the ground truth box and if this box is from the anchors
                     # point of view the box with the highest IoU then assign box to this anchor
                     self.assigned_ground_truth_box = b
+                    self.assigned_iou = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
                     self.type = 'positive'
-            # TODO: ERROR, !='positive does not work when label has to be reassigned (e.g. when anchor with best
-            # TODO: ... iou < 70 nicht mehr exklustiv bester anchor ist
-            if self.assigned_ground_truth_box is not None:
-                if max(self.intersectionsOfUnions) >= 0.3 and max(self.intersectionsOfUnions) < 0.7 and self != \
-                        self.assigned_ground_truth_box.anchors[self.assigned_ground_truth_box.ious.index(
-                            max(self.assigned_ground_truth_box.ious))]:
+
+                elif 0.3 >= max_iou_anchor < upper_threshold:
                     self.type = 'neutral'
-                elif self != self.assigned_ground_truth_box.anchors[self.assigned_ground_truth_box.ious.index(max(
-                        self.assigned_ground_truth_box.ious))] and self.assigned_iou < 0.7  :
+
+                elif max_iou_anchor < upper_threshold:
                     self.type = 'negative'
+
+        else:
+            self.type = 'negative'
 
 

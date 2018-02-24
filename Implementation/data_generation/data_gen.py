@@ -42,6 +42,7 @@ def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_im
     collages_filename = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)
     targets_filename  = str(num_collages)+'_'+str(collage_size)+'_'+str(min_num_imgs)+'_'+str(max_num_imgs)+'_'+str(replacement)+'_'+str(allow_overhang)+'_'+str(background)+'_'+str(min_scaling)+'_'+str(max_scaling)+'_'+str(scaling_steps)+'_'+str(counterclock_angle)+'_'+str(clockwise_angle)+'_'+str(rotation_steps)
     files = os.listdir('./data_generation')
+
     existence = False
     for f in files:
         if collages_filename in f or targets_filename in f:
@@ -335,4 +336,3 @@ def scale_pyramid(img, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
         pyramid.append(rescale(img, scale))
     return pyramid, scales
 
-create_collages()

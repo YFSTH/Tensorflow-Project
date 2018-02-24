@@ -12,9 +12,8 @@ class GroundTruthBox:
         self.ious = []
 
     def add_anchor(self, anchor, iou):
-        if iou > 0:
-            self.anchors.append(anchor)
-            self.ious.append(iou)
+        self.anchors.append(anchor)
+        self.ious.append(iou)
 
     def get_best_anchor(self):
         if len(self.anchors) > 0:
