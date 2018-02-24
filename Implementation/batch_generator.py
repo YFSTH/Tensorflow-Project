@@ -1,13 +1,13 @@
 import os
 import pickle
+
 import numpy as np
-import pdb
+
 
 class MNISTCollage:
     """ Helper class for initializing MNIST Collage data set """
     def __init__(self, directory):
         files = os.listdir(directory)
-
         for filename in files:
             size = filename.split("_")
             if "train_collages" in filename:
@@ -45,6 +45,8 @@ class MNISTCollage:
         elif type == 'test':
             data = self.test_data
             labels = self.test_labels
+        else:
+            raise ValueError("Unknown type: " + str(type))
 
         # generate batches
         for i in range(len(data) // batch_size):
@@ -52,4 +54,3 @@ class MNISTCollage:
             last = first + batch_size
             yield np.array(data[first:last]), np.array(labels[first:last])
             # data: (num collages, height, width), labels: (num collages, num mnist imgs, num sublabels)
-
