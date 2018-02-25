@@ -16,6 +16,8 @@ from vgg16.vgg16 import VGG16
 
 
 # Set class variables
+
+# Image generation class variables
 NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 1
@@ -29,18 +31,24 @@ SCALING_STEPS = 2
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 2
-BATCH_SIZE = 5
+
+# Batch generator class variable
+BATCH_SIZE = 1
+
+# Anchor creation and selection class variables
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
 ANCHORS_SCALES = [42, 28, 14]
 ANCHORS_RATIOS = [1.75, 1, 0.40]
 NUM_ANCHORS = 9
-EPOCHS_TRAINSTEP1 = 2
-LOAD_LAST_ANCHORS = False
+LOAD_LAST_ANCHORS = True
 NUM_SELECTED_ANCHORS = 256
 ROI_FM_SIZE = 8
 NUM_CLASSES = 10
+
+EPOCHS_TRAINSTEP1 = 2
+
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -58,6 +66,7 @@ test_labels  = batcher.test_labels
 #for x,y in batcher.get_batch(4):
 #    pdb.set_trace()
 
+
 # Create anchor tensor
 
 anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
@@ -67,7 +76,6 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # y-"                                            " second 9 "                    "
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
-
 
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
@@ -88,21 +96,31 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
                                                                      num_selected=NUM_SELECTED_ANCHORS)
 # These methods should return two tensors:
 # First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
-# Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS]),
+# Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS, IoU]),
 #                where ANCHOR_TYPE is either positive (=1), negative (=0), neutral (=-1) or deactivated
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
 
-# Filter anchors
-
-
 
 # TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
-# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors,
+# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors, 3. too coarse feature map
 
-# TODO: Filtering and NMS
+# TODO: NMS
+
+# Debugging the ground truth and selection tensor II
+#import matplotlib.pyplot as plt
+#for img in range(5):
+#    plt.imshow(batcher.train_data[img,:,:])
+#    plt.show()
+#    print(train_labels[img])
+#    for j in range(2):
+#        print(train_ground_truth_tensor[img,j,:,:])
+#        print(train_selection_tensor[img,j,:,:,0])
+#    pdb.set_trace()
 
 
+
+# TODO: Deep debugging of ground truth and selection tensors
 pdb.set_trace()
 
 
@@ -121,22 +139,38 @@ pdb.set_trace()
 ### Region Proposal Network RPN
 
 with tf.variable_scope('rpn'):
-    X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM], name='input_placeholder')
-    Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
-    # TODO: Might be sufficient to just hand over the classes of the single mnist images
-    values_anchors = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
-    values_trueboxes = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+
+    with tf.name_scope('placeholders'):
+        X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
+        Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
+        # TODO: Might be sufficient to just hand over the classes of the single mnist images
+        anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+        groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+        selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+
+    with tf.name_scope('anchor_tensors_dimension_rearrangement'):
+        # swap dimensions of anchor, groundtruth box and selection tensors so they fit the predicted coordinate tensor
+        anchor_coordinates = tf.transpose(anchor_coordinates, [0, 2, 3, 1])
+        groundtruth_coordinates = tf.transpose(groundtruth_coordinates, [0, 2, 3, 1])
+        selection_tensor = tf.transpose(selection_tensor, [0, 2, 3, 1])
 
     with tf.variable_scope('pre_heads_layers'):
         prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
-        predicted_x = prehead_conv[:,:,:,0:9]
-        predicted_y = prehead_conv[:,:,:,9:18]
-        predicted_w = prehead_conv[:,:,:,18:27]
-        predicted_h = prehead_conv[:,:,:,27:36]
-        anchors_x = values_anchors[:,:,:,0:9]
-        anchors_y = values_anchors[:,:,:,9:18]
-        anchors_w = values_anchors[:,:,:,18:27]
-        anchors_h = values_anchors[:,:,:,27:36]
+        # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
+
+    with tf.variable_scope('regression_head'):
+        predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, True)
+        # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36
+        predicted_x = predicted_coordinates[:, :, :, 0:9]
+        predicted_y = predicted_coordinates[:, :, :, 9:18]
+        predicted_w = predicted_coordinates[:, :, :, 18:27]
+        predicted_h = predicted_coordinates[:, :, :, 27:36]
+
+        anchors_x = anchor_coordinates[:, :, :, 0:9]
+        anchors_y = anchor_coordinates[:, :, :, 9:18]
+        anchors_w = anchor_coordinates[:, :, :, 18:27]
+        anchors_h = anchor_coordinates[:, :, :, 27:36]
+
         t_predicted_x = tf.divide(tf.subtract(predicted_x, anchors_x), anchors_w)
         t_predicted_y = tf.divide(tf.subtract(predicted_y, anchors_y), anchors_h)
         t_predicted_w = tf.log(tf.divide(predicted_w, anchors_w))
@@ -146,9 +180,6 @@ with tf.variable_scope('rpn'):
         t_target_w = tf.log(tf.divide(true_w, anchors_w))
         t_target_h = tf.log(tf.divide(true_h, anchors_h))
 
-    with tf.variable_scope('regression_head'):
-        values_predicted = convolutional(prehead_conv, [1, 1, 512, 36], 1, True)
-        # have (N,NUM_ANCHORS*4,W,H)
 
 
         #conv1_transposed = tf.transpose(conv1, [0,2,3,1])

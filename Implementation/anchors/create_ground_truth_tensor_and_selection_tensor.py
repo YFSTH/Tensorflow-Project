@@ -58,8 +58,6 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         elif t == 'neutral':
             neutral_anchors += 1
             anchortype = -1
-        #else:
-        #   print('!!!!! type:',t)
 
         # get mnist number class of assigned ground truth box
         if box is not None:
