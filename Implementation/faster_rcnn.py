@@ -194,11 +194,12 @@ with tf.variable_scope('rpn'):
         with tf.variable_scope('regression_loss'):
 
             def smooth_l1_loss(raw_deviations, selection_tensor):
-                # filter out deviations for anchor-groundtruthbox-pairs which got an deactivation tag
+                # select deviations for anchors marked as positive
                 activation_value = tf.constant(1.0, dtype=tf.float32)
                 filter_plane = tf.equal(selection_tensor[:, :, :, :, 0], activation_value)
                 filter_tensor = tf.cast(tf.tile(filter_plane, [4, 1, 1, 1]), tf.float32)
                 filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
+                pdb.set_trace()
 
                 # calculate the smooth l1 loss
 
@@ -209,8 +210,6 @@ with tf.variable_scope('rpn'):
 
                 # TODO: muss die Summe vorher oder nachher gebildet werden?
 
-                # TODO: Warum Ergebnis negativ?
-
                 # absolute deviations
                 absolute_deviations = tf.abs(summed_deviations)
 
@@ -218,21 +217,22 @@ with tf.variable_scope('rpn'):
                 case1_sel_tensor = tf.less(absolute_deviations, 1)
                 case1_deviations = tf.multiply(absolute_deviations, tf.cast(case1_sel_tensor, tf.float32))
                 case1_output = tf.multiply(tf.square(case1_deviations), 0.5)
+                # TODO: produces output of zero
 
                 # case 2: otherwise
+                case2_output = tf.subtract(tf.abs(absolute_deviations), 0.5)
                 case2_sel_tensor = tf.greater_equal(absolute_deviations, 1)
-                case2_deviations = tf.multiply(absolute_deviations, tf.cast(case2_sel_tensor, tf.float32))
-                case2_output = tf.subtract(tf.abs(case2_deviations), 0.5)
+                case2_output = tf.multiply(absolute_deviations, tf.cast(case2_sel_tensor, tf.float32))
 
                 smooth_anchor_losses = case1_output + case2_output
 
                 unnormalized_reg_loss = tf.reduce_sum(smooth_anchor_losses)
                 normalized_reg_loss = tf.divide(unnormalized_reg_loss, (VGG_FM_SIZE**2)*9)
 
-                return normalized_reg_loss
+                return normalized_reg_loss, case1_output, case2_output, absolute_deviations, case2_sel_tensor, smooth_anchor_losses
 
             raw_deviations = t_predicted - t_target
-            rpn_reg_loss = smooth_l1_loss(raw_deviations, selection_tensor)
+            rpn_reg_loss, c1, c2, ads, c2st, c1ds = smooth_l1_loss(raw_deviations, selection_tensor)
 
     with tf.variable_scope('classification_head'):
         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, True, tf.nn.relu)
@@ -313,32 +313,11 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss, rpn_cls_loss, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
+                    _, lr, lc, ol, co1, co2, ad, c2s, cld = sess.run([rpn_train_op, rpn_reg_loss, rpn_cls_loss, overall_loss, c1, c2, ads, c2st, c1ds], feed_dict={X: vgg16_conv5_3_relu,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
                                                         selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
                     print('reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
-
-                # TODO: Create ground truth boxregression tensor (here, after batching): (BATCHSIZE, NUM_ANCHORS*4, W, H)
-                # TODO: ... how to implement it? As a sparse tensor? Alternatives?
-                # 1. For every image positive, neutral and negative anchors must be identified
-                # 2. For the positive anchors strongest related ground truth box (coordinates) must be
-                #    determined
-                #    -> Idea: Can be done BEFORE DFG / TF
-                # 3. Regression loss is calculated only between positive anchors and strongest related
-                #    ground truth box AND ADDITIONALLY A SUBSAMPLE OF THE ANCHORS IS DRAWN, SEE PAPER
-                #    -> Tensor approach can be applied, but negative anchor loss must be zero weighted
-                #       or better: not computed at all
-                # 4. NMS etc. (, filtering out too small boxes, selecting top N boxes) seem to come
-                #    after bbox regression and classification
-
-
-                # TODO: Create predicted boxregression tensor (inside the graph?)
-
-                #tmp = sess.run([prehead_conv], feed_dict={X: X_batch,
-                #                                    Y: Y_batch,
-                #                                    values_anchors: anchors,
-                #                                    })
-                #print(tmp)
+                    pdb.set_trace()
 
