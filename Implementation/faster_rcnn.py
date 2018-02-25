@@ -101,6 +101,18 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
 
+# swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN
+# and add length 1 zero dimension
+
+swapaxes = lambda x: np.swapaxes(np.swapaxes(x, 1, 2), 2, 3)
+
+anchors = swapaxes(anchors).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
+train_ground_truth_tensor = swapaxes(train_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
+train_selection_tensor = swapaxes(train_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
+valid_ground_truth_tensor = swapaxes(valid_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
+valid_selection_tensor = swapaxes(valid_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
+test_ground_truth_tensor = swapaxes(test_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
+test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
 
 # TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
 # TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors, 3. too coarse feature map
@@ -144,42 +156,46 @@ with tf.variable_scope('rpn'):
         X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
         Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
         # TODO: Might be sufficient to just hand over the classes of the single mnist images
-        anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
-        groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
-        selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_ANCHORS*4, VGG_FM_SIZE, VGG_FM_SIZE])
+        anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
+        groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
+        selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3])
 
-    with tf.name_scope('anchor_tensors_dimension_rearrangement'):
-        # swap dimensions of anchor, groundtruth box and selection tensors so they fit the predicted coordinate tensor
-        anchor_coordinates = tf.transpose(anchor_coordinates, [0, 2, 3, 1])
-        groundtruth_coordinates = tf.transpose(groundtruth_coordinates, [0, 2, 3, 1])
-        selection_tensor = tf.transpose(selection_tensor, [0, 2, 3, 1])
+    #with tf.name_scope('anchor_tensors_dimension_rearrangement'):
+    #    # swap dimensions of anchor, groundtruth box and selection tensors so they fit the predicted coordinate tensor
+    #    anchor_coordinates = tf.transpose(anchor_coordinates, [0, 2, 3, 1])
+    #    groundtruth_coordinates = tf.transpose(groundtruth_coordinates, [0, 2, 3, 1])
+    #    selection_tensor = tf.transpose(selection_tensor, [0, 2, 3, 1])
 
-    with tf.variable_scope('pre_heads_layers'):
+    with tf.variable_scope('pre_heads_layer'):
         prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.variable_scope('regression_head'):
         predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, True)
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36
-        predicted_x = predicted_coordinates[:, :, :, 0:9]
-        predicted_y = predicted_coordinates[:, :, :, 9:18]
-        predicted_w = predicted_coordinates[:, :, :, 18:27]
-        predicted_h = predicted_coordinates[:, :, :, 27:36]
 
+        # perform boxregression parametrization by transforming the coordinates and width and height to yield the
+        # predicted and true (=target) coordinate parameters used for the regression loss
         anchors_x = anchor_coordinates[:, :, :, 0:9]
         anchors_y = anchor_coordinates[:, :, :, 9:18]
         anchors_w = anchor_coordinates[:, :, :, 18:27]
         anchors_h = anchor_coordinates[:, :, :, 27:36]
-
+        predicted_x = predicted_coordinates[:, :, :, 0:9]
+        predicted_y = predicted_coordinates[:, :, :, 9:18]
+        predicted_w = predicted_coordinates[:, :, :, 18:27]
+        predicted_h = predicted_coordinates[:, :, :, 27:36]
+        target_x = groundtruth_coordinates[:, :, :, 0:9]
+        target_y = groundtruth_coordinates[:, :, :, 9:18]
+        target_w = groundtruth_coordinates[:, :, :, 18:27]
+        target_h = groundtruth_coordinates[:, :, :, 27:36]
         t_predicted_x = tf.divide(tf.subtract(predicted_x, anchors_x), anchors_w)
         t_predicted_y = tf.divide(tf.subtract(predicted_y, anchors_y), anchors_h)
         t_predicted_w = tf.log(tf.divide(predicted_w, anchors_w))
         t_predicted_h = tf.log(tf.divide(predicted_h, anchors_h))
-        t_target_x = tf.divide(tf.subtract(true_x, anchors_x), anchors_w)
-        t_target_y = tf.divide(tf.subtract(true_y, anchors_y), anchors_h)
-        t_target_w = tf.log(tf.divide(true_w, anchors_w))
-        t_target_h = tf.log(tf.divide(true_h, anchors_h))
-
+        t_target_x = tf.divide(tf.subtract(target_x, anchors_x), anchors_w)
+        t_target_y = tf.divide(tf.subtract(target_y, anchors_y), anchors_h)
+        t_target_w = tf.log(tf.divide(target_w, anchors_w))
+        t_target_h = tf.log(tf.divide(target_h, anchors_h))
 
 
         #conv1_transposed = tf.transpose(conv1, [0,2,3,1])
@@ -230,16 +246,20 @@ if __name__ == "__main__":
 
         for epoch in range(EPOCHS_TRAINSTEP1):
 
-            for X_batch, Y_batch in batcher.get_batch(BATCH_SIZE):
+            for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
 
                 result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                 vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
                 print(vgg16_conv5_3_relu.shape)
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
-                _ = sess.run([predicted_h], feed_dict={X: vgg16_conv5_3_relu,
-                                                            Y: Y_batch})
-                print(_[0].shape)
+                if BATCH_SIZE == 1:
+                    _ = sess.run([t_target_h], feed_dict={X: vgg16_conv5_3_relu,
+                                                          Y: Y_batch,
+                                                          anchor_coordinates: anchors[first],
+                                                          groundtruth_coordinates: train_ground_truth_tensor[first],
+                                                          selection_tensor: train_selection_tensor[first]})
+                    print(_[0].shape)
 
                 # TODO: Create ground truth boxregression tensor (here, after batching): (BATCHSIZE, NUM_ANCHORS*4, W, H)
                 # TODO: ... how to implement it? As a sparse tensor? Alternatives?

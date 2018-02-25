@@ -52,5 +52,5 @@ class MNISTCollage:
         for i in range(len(data) // batch_size):
             first = i * batch_size
             last = first + batch_size
-            yield np.array(data[first:last]), np.array(labels[first:last])
+            yield np.array(data[first:last]), np.array(labels[first:last]), first, last
             # data: (num collages, height, width), labels: (num collages, num mnist imgs, num sublabels)
