@@ -209,6 +209,8 @@ with tf.variable_scope('rpn'):
 
                 # TODO: muss die Summe vorher oder nachher gebildet werden?
 
+                # TODO: Warum Ergebnis negativ?
+
                 # absolute deviations
                 absolute_deviations = tf.abs(summed_deviations)
 
@@ -230,7 +232,7 @@ with tf.variable_scope('rpn'):
                 return normalized_reg_loss
 
             raw_deviations = t_predicted - t_target
-            rpn_reg_loss = -smooth_l1_loss(raw_deviations, selection_tensor)
+            rpn_reg_loss = smooth_l1_loss(raw_deviations, selection_tensor)
 
     with tf.variable_scope('classification_head'):
         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, True, tf.nn.relu)
