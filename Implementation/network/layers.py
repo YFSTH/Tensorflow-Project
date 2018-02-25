@@ -48,7 +48,7 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
     :param activation: activation function
     :return: weighted output
     """
-    fan_in = int(input.shape[1])
+    fan_in = int(input.shape[-1])
 
     if "relu" in str(activation):
         weight_initializer = tf.random_normal_initializer(stddev=2.0 / fan_in)
@@ -72,5 +72,14 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
     return output
 
 
-def roi_pooling(input, proposals):
+def roi_pooling(input, proposals, output_shape):
+    """
+    Initialize a region of interest (ROI) pooling layer with given proposals and output shape. Rescale all region
+    propsals to uniform height and width for fully-connected layers.
+
+    :param input: feature maps from a convolutional layer
+    :param proposals: 4D tensor for region proposals of [left upper corner x, left upper corner y, height, width]
+    :param output_shape: 2D tensor for rescaled output of [height, width]
+    :return: uniform region proposals
+    """
     pass

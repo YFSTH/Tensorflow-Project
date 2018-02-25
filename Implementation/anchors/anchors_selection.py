@@ -49,6 +49,10 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
     if to_be_deactivated_positive_anchors > 0:
         # choose the anchors to un-select and unselect them by assigning -3 to anchor type param
         # located in the selection tensor, to indicate that the anchor won´t be used
+<<<<<<< HEAD
+=======
+        #pdb.set_trace()
+>>>>>>> f4b0389493fa5631cdd590ae4d97a89d52d23022
         choosen_idxs = np.random.choice(np.arange(0,len(valid_positive_anchor_coordinates)),
                                         int(to_be_deactivated_positive_anchors), replace=False)
         for excess_anchor in choosen_idxs:
@@ -59,6 +63,10 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
     if to_be_deactivated_negative_anchors > 0:
         # choose the anchors to un-select and unselect them by assigning -3 to anchor type param
         # located in the selection tensor, to indicate that the anchor won´t be used
+<<<<<<< HEAD
+=======
+        #pdb.set_trace()
+>>>>>>> f4b0389493fa5631cdd590ae4d97a89d52d23022
         choosen_idxs = np.random.choice(np.arange(0, len(valid_negative_anchor_coordinates)),
                                         int(to_be_deactivated_negative_anchors), replace=False)
         for excess_anchor in choosen_idxs:
