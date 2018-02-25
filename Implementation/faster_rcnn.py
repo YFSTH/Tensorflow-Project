@@ -66,7 +66,7 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
 
-#pdb.set_trace()
+
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
 train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
@@ -87,20 +87,12 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 # These methods should return two tensors:
 # First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
 # Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS]),
-#                where ANCHOR_TYPE is either positive (=1), negative (=0) or neutral (=-1) and MNIST_CLASS
-#                indicates the mnist number class of the assigned ground truth mnist image xor '-2' if no
-#                ground truth box was assigned
-
-# Estimated required time for a set of 10000 * 3 collages: 33 hours.
+#                where ANCHOR_TYPE is either positive (=1), negative (=0), neutral (=-1) or deactivated
+#                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
+#                '-2' if no ground truth box was assigned
 
 # Filter anchors
 
- 
-
-# TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
-# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors,
-
-# TODO: Filtering and NMS
 
 
 # TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
@@ -108,7 +100,8 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 
 # TODO: Filtering and NMS
 
-#pdb.set_trace()
+
+pdb.set_trace()
 
 
 

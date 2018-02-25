@@ -58,8 +58,8 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         elif t == 'neutral':
             neutral_anchors += 1
             anchortype = -1
-        else:
-            print('!!!!! type:',t)
+        #else:
+        #   print('!!!!! type:',t)
 
         # get mnist number class of assigned ground truth box
         if box is not None:
@@ -73,9 +73,9 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         sel_tensor[anchor_idx, w_idx, h_idx, 2] = a.assigned_iou
 
     # Testing/ debugging purposes:
-    print('positive anchors:', positive_anchors)
-    print('negative anchors:', negative_anchors)
-    print('neutral anchors:', neutral_anchors)
+    #print('positive anchors:', positive_anchors)
+    #print('negative anchors:', negative_anchors)
+    #print('neutral anchors:', neutral_anchors)
 
     return gtb_tensor, sel_tensor
 
