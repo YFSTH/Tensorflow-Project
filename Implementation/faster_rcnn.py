@@ -11,7 +11,7 @@ from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
 from data_generation.data_gen import *
-from network.layers import convolutional, fully_connected
+from network.layers import convolutional, fully_connected, roi_pooling
 from vgg16.vgg16 import VGG16
 
 
@@ -34,6 +34,7 @@ ROTATION_STEPS = 2
 
 # Batch generator class variable
 BATCH_SIZE = 1
+EPOCHS_TRAINSTEP1 = 2
 
 # Anchor creation and selection class variables
 IMG_SIZE = 256
@@ -44,10 +45,10 @@ ANCHORS_RATIOS = [1.75, 1, 0.40]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
 NUM_SELECTED_ANCHORS = 256
+
+# Fast R-CNN class variables
 ROI_FM_SIZE = 8
 NUM_CLASSES = 10
-
-EPOCHS_TRAINSTEP1 = 2
 
 
 # Generate images xor load them if they already exist with the desired properties
@@ -133,19 +134,11 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 
 
 # TODO: Deep debugging of ground truth and selection tensors
-pdb.set_trace()
+#pdb.set_trace()
 
 
 
 ### Data Flow Graph Construction Phase ################################################################################
-
-
-#def create_graph():
-#   """ Creates a graph from saved GraphDef file and returns a saver. """
-#   with tf.gfile.FastGFile(os.path.join("imagenet", "classify_image_graph_def.pb"), 'rb') as file:
-#       graph_def = tf.GraphDef()
-#       graph_def.ParseFromString(file.read())
-#       tf.import_graph_def(graph_def, name='')
 
 
 ### Region Proposal Network RPN
@@ -204,7 +197,7 @@ with tf.variable_scope('rpn'):
         #prediction = 0
 
     with tf.variable_scope('classification_head'):
-        clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, 32], 1, True, tf.nn.relu)
+        clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, 18], 1, True, tf.nn.relu)
 
     with tf.variable_scope('costs_and_optimization'):
         pass
@@ -282,4 +275,3 @@ if __name__ == "__main__":
                 #                                    values_anchors: anchors,
                 #                                    })
                 #print(tmp)
-

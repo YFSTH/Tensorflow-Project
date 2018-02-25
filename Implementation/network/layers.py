@@ -1,3 +1,5 @@
+import numpy as np
+from skimage.measure import block_reduce
 import tensorflow as tf
 
 
@@ -82,4 +84,19 @@ def roi_pooling(input, proposals, output_shape):
     :param output_shape: 2D tensor for rescaled output of [height, width]
     :return: uniform region proposals
     """
-    pass
+    roi = input[:, proposals[0]:proposals[0]+proposals[2], proposals[1]:proposals[1]+proposals[3], :]
+
+    if proposals[2] % output_shape[0] != 0:
+        roi = np.repeat(roi, output_shape[0], axis=1)
+    else:
+        proposals[2] = int(proposals[2] / output_shape[0])
+
+    if proposals[3] % output_shape[1] != 0:
+        roi = np.repeat(roi, output_shape[1], axis=2)
+    else:
+        proposals[3] = int(proposals[3] / output_shape[1])
+
+    kernel = (1, proposals[2], proposals[3], 1)
+    roi = block_reduce(roi, kernel, np.max)
+
+    return roi
