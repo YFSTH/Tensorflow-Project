@@ -44,6 +44,9 @@ class Anchor(object):
         '''
         # calculate most upper-left (x1,y1) and bottom-right (x2,y2) pixel coordinates of
         # anchor and ground truth box
+
+        # TODO: Passt nicht, e.g. (x,y) = (1,1) w = 4 => x - 2 = -1
+        # TODO: gerade und ungerader Fall
         x1_a = self.x - (self.w/2)
         x2_a = self.x + (self.w/2)
         y1_a = self.y - (self.h/2)
@@ -97,14 +100,16 @@ class Anchor(object):
                     # if the anchor has an IoU > 0.70 with the ground truth box and if this box is from the anchors
                     # point of view the box with the highest IoU then assign box to this anchor
                     self.assigned_ground_truth_box = b
-                    self.assigned_iou = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
+                    self.assigned_iou = iuo
                     self.type = 'positive'
 
-                elif 0.3 >= max_iou_anchor < upper_threshold:
+                elif 0.3 <= max_iou_anchor < upper_threshold and best_box:
                     self.type = 'neutral'
+                    self.assigned_iou = iuo
 
-                elif max_iou_anchor < upper_threshold:
+                elif max_iou_anchor < 0.3 and best_box:
                     self.type = 'negative'
+                    self.assigned_iou = iuo
 
         else:
             self.type = 'negative'

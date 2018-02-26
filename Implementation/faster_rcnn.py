@@ -23,14 +23,14 @@ COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 3
 MAX_NUM_IMGS = 10
 REPLACEMENT = True
-ALLOW_OVERHANG = True
+ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 0.51
-MAX_SCALING = 1.5
-SCALING_STEPS = 2
+MIN_SCALING = 2.0 # original mnist images size is 28x28
+MAX_SCALING = 2.0
+SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
-ROTATION_STEPS = 2
+ROTATION_STEPS = 1
 
 # Batch generator class variable
 BATCH_SIZE = 1
@@ -39,8 +39,8 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [42, 28, 14]
-ANCHORS_RATIOS = [1.75, 1, 0.40]
+ANCHORS_SCALES = [56, 56, 56]
+ANCHORS_RATIOS = [1, 1, 1]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
 NUM_SELECTED_ANCHORS = 256
@@ -135,7 +135,6 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 #        print(train_ground_truth_tensor[img,j,:,:])
 #        print(train_selection_tensor[img,j,:,:,0])
 
-# TODO: Deep debugging of ground truth and selection tensors
 #pdb.set_trace()
 
 
@@ -157,14 +156,14 @@ with tf.variable_scope('rpn'):
 
     with tf.variable_scope('pre_heads_layer'):
 
-        prehead_conv = convolutional(X, [3, 3, 512, 512], 1, True, tf.nn.relu)
+        prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False, tf.nn.relu)
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.name_scope('regression_head'):
 
         with tf.variable_scope('predictions'):
 
-            predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, True)
+            predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, False)
             # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36)
 
         with tf.variable_scope('regression_parametrization'):
@@ -198,8 +197,6 @@ with tf.variable_scope('rpn'):
         with tf.variable_scope('regression_loss'):
             def smooth_l1_loss(raw_deviations, selection_tensor):
                 # raw deviations of shape (4, 16, 16, 9)
-                # TODO: Phenomenon: nearly all entries zero, that makes no sense,
-                # TODO: ... at least not for the three positive anchors
                 # select deviations for anchors marked as positive
                 activation_value = tf.constant(1.0, dtype=tf.float32)
                 filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
@@ -228,12 +225,10 @@ with tf.variable_scope('rpn'):
                 # absolute deviations
                 absolute_deviations = tf.abs(summed_deviations)
 
-                # TODO: Debugging: Filtered tensor and absolute deviations now seems to bear correct values
                 # case 1: l(x), |x| < 1
                 case1_sel_tensor = tf.less(absolute_deviations, 1)
                 case1_deviations = tf.multiply(absolute_deviations, tf.cast(case1_sel_tensor, tf.float32))
                 case1_output = tf.multiply(tf.square(case1_deviations), 0.5)
-                # TODO: produces output of zero
 
                 # case 2: otherwise
                 case2_output = tf.subtract(tf.abs(absolute_deviations), 0.5)
@@ -248,10 +243,12 @@ with tf.variable_scope('rpn'):
                 return normalized_reg_loss
 
             raw_deviations = t_predicted - t_target
-            rpn_reg_loss = smooth_l1_loss(raw_deviations, selection_tensor)
+            rpn_reg_loss_normalized = smooth_l1_loss(raw_deviations, selection_tensor)
+            # TODO: Box regression produces stable error, possible reasons: 1. error in implementation, 2. error in anchor tensor production,
+            # TODO: 3. feature map too small or anchor scales do not fit ground truth boxes
 
     with tf.variable_scope('classification_head'):
-        clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, True, tf.nn.relu)
+        clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, False, tf.nn.relu)
         # should be of shape (BATCH_SIZE, 16, 16, NUM_ANCHORS*2)
 
         with tf.variable_scope('classification_loss'):
@@ -278,9 +275,10 @@ with tf.variable_scope('rpn'):
 
             # calculate the cross entropy loss
             rpn_cls_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
+            rpn_cls_loss_normalized = tf.divide(rpn_cls_loss, NUM_SELECTED_ANCHORS)
 
     with tf.name_scope('overall_loss'):
-        overall_loss = rpn_cls_loss + REG_TO_CLS_LOSS_RATIO * rpn_reg_loss
+        overall_loss = rpn_cls_loss_normalized + REG_TO_CLS_LOSS_RATIO * rpn_reg_loss_normalized
 
     with tf.variable_scope('costs_and_optimization'):
         rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
@@ -329,7 +327,7 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss, rpn_cls_loss, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
+                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),

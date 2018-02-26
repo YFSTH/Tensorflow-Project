@@ -70,8 +70,11 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
         sel_tensor[anchor_idx, w_idx, h_idx, 1] = mnist_class
         sel_tensor[anchor_idx, w_idx, h_idx, 2] = a.assigned_iou
 
+        # Testing / debugging:
+        #print('anchortype:',anchortype,'iou:',a.assigned_iou)
+
     # Testing/ debugging purposes:
-    #print('positive anchors:', positive_anchors)
+    print('positive anchors:', positive_anchors)
     #print('negative anchors:', negative_anchors)
     #print('neutral anchors:', neutral_anchors)
 
