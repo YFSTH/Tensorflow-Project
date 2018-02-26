@@ -20,8 +20,8 @@ from vgg16.vgg16 import VGG16
 # Image generation class variables
 NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
-MIN_NUM_IMGS = 1
-MAX_NUM_IMGS = 3
+MIN_NUM_IMGS = 3
+MAX_NUM_IMGS = 10
 REPLACEMENT = True
 ALLOW_OVERHANG = True
 BACKGROUND = 'black'
@@ -51,7 +51,7 @@ NUM_CLASSES = 10
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 2
+EPOCHS_TRAINSTEP1 = 3
 LR_RPN = 0.001
 
 # TODO: Employ learning rate decay as described in paper
@@ -216,7 +216,6 @@ with tf.variable_scope('rpn'):
 
                 filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
                                            filtered_tensor)
-                pdb.set_trace()
 
                 # calculate the smooth l1 loss
 

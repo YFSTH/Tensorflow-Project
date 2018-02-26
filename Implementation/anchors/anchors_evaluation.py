@@ -73,8 +73,9 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
             for anchor in anchor_objects:
                 for box in ground_truth_boxes:
                     anchor.append_ground_truth_box(box)
-                    for a in anchor_objects:
-                        a.evaluate_anchor()
+
+            for a in anchor_objects:
+                a.evaluate_anchor()
 
             gtt, slt = create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index)
 
