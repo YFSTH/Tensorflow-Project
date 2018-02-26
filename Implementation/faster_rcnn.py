@@ -196,27 +196,40 @@ with tf.variable_scope('rpn'):
             # t_target and t_predicted should have shape (4, feature map size, feature map size, number of anchors)
 
         with tf.variable_scope('regression_loss'):
-
             def smooth_l1_loss(raw_deviations, selection_tensor):
+                # raw deviations of shape (4, 16, 16, 9)
+                # TODO: Phenomenon: nearly all entries zero, that makes no sense,
+                # TODO: ... at least not for the three positive anchors
                 # select deviations for anchors marked as positive
                 activation_value = tf.constant(1.0, dtype=tf.float32)
-                filter_plane = tf.equal(selection_tensor[:, :, :, :, 0], activation_value)
-                filter_tensor = tf.cast(tf.tile(filter_plane, [4, 1, 1, 1]), tf.float32)
+                filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
+
+                # remove nans from tensor to enable aggregating calculations
+                # filter_plane = tf.where(tf.is_nan(filter_plane), tf.zeros_like(filter_plane),
+                #                          filter_plane)
+
+                # filter plane shape: (1, 16, 16, 9)
+                # auf ebene 1 ein positive value auf ebene 7 zwei positive values
+                filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
+
                 filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
+
+                filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
+                                           filtered_tensor)
                 pdb.set_trace()
 
                 # calculate the smooth l1 loss
 
                 # sum up deviations for the four coordinates per anchor
+
                 summed_deviations = tf.reduce_sum(filtered_tensor, 0)
-                # remove nans from tensor to enable aggregating calculations
-                summed_deviations = tf.where(tf.is_nan(summed_deviations), tf.zeros_like(summed_deviations), summed_deviations)
 
                 # TODO: muss die Summe vorher oder nachher gebildet werden?
 
                 # absolute deviations
                 absolute_deviations = tf.abs(summed_deviations)
 
+                # TODO: Debugging: Filtered tensor and absolute deviations now seems to bear correct values
                 # case 1: l(x), |x| < 1
                 case1_sel_tensor = tf.less(absolute_deviations, 1)
                 case1_deviations = tf.multiply(absolute_deviations, tf.cast(case1_sel_tensor, tf.float32))
@@ -231,12 +244,12 @@ with tf.variable_scope('rpn'):
                 smooth_anchor_losses = case1_output + case2_output
 
                 unnormalized_reg_loss = tf.reduce_sum(smooth_anchor_losses)
-                normalized_reg_loss = tf.divide(unnormalized_reg_loss, (VGG_FM_SIZE**2)*9)
+                normalized_reg_loss = tf.divide(unnormalized_reg_loss, (VGG_FM_SIZE ** 2) * 9)
 
-                return normalized_reg_loss, case1_output, case2_output, absolute_deviations, case2_sel_tensor, smooth_anchor_losses
+                return normalized_reg_loss
 
             raw_deviations = t_predicted - t_target
-            rpn_reg_loss, c1, c2, ads, c2st, c1ds = smooth_l1_loss(raw_deviations, selection_tensor)
+            rpn_reg_loss = smooth_l1_loss(raw_deviations, selection_tensor)
 
     with tf.variable_scope('classification_head'):
         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, True, tf.nn.relu)
@@ -317,7 +330,7 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol, co1, co2, ad, c2s, cld = sess.run([rpn_train_op, rpn_reg_loss, rpn_cls_loss, overall_loss, c1, c2, ads, c2st, c1ds], feed_dict={X: vgg16_conv5_3_relu,
+                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss, rpn_cls_loss, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
