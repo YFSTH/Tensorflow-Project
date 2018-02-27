@@ -78,7 +78,7 @@ class Anchor(object):
 
         if len(self.intersectionsOfUnions) is not 0:
 
-            upper_threshold = 0.7
+            upper_threshold = 0.60
 
             for b in self.groundTruthBoxes:
 

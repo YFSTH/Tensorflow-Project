@@ -21,13 +21,13 @@ from vgg16.vgg16 import VGG16
 NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 3
-MAX_NUM_IMGS = 10
+MAX_NUM_IMGS = 15
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 2.0 # original mnist images size is 28x28
+MIN_SCALING = 0.5 # original mnist images size is 28x28
 MAX_SCALING = 2.0
-SCALING_STEPS = 1
+SCALING_STEPS = 3
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 1
@@ -39,7 +39,7 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [56, 56, 56]
+ANCHORS_SCALES = [56, 28, 14]
 ANCHORS_RATIOS = [1, 1, 1]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
@@ -163,7 +163,7 @@ with tf.variable_scope('rpn'):
 
         with tf.variable_scope('predictions'):
 
-            predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, False)
+            predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, False, tf.nn.relu)
             # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36)
 
         with tf.variable_scope('regression_parametrization'):
