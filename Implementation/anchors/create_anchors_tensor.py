@@ -31,6 +31,7 @@ def get_anchors_centers(original_img_size, feature_map_size):
              feature map
     '''
     import numpy as np
+    # TODO: Mögliche Fehlerquelle
     receptive_field_size = int(original_img_size/feature_map_size)
     X = np.zeros((feature_map_size,feature_map_size))
     Y = np.zeros((feature_map_size,feature_map_size))

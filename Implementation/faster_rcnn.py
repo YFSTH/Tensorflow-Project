@@ -49,12 +49,12 @@ NUM_SELECTED_ANCHORS = 256
 
 
 # Fast R-CNN class variables
-ROI_FM_SIZE = 8
+ROI_FM_SIZE = 5
 NUM_CLASSES = 10
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 3
+EPOCHS_TRAINSTEP1 = 5
 LR_RPN = 0.001
 
 # TODO: Employ learning rate decay as described in paper
@@ -224,12 +224,11 @@ with tf.variable_scope('rpn'):
 
                 # sum up deviations for the four coordinates per anchor
 
-                summed_deviations = tf.reduce_sum(filtered_tensor, 0)
-
-                # TODO: muss die Summe vorher oder nachher gebildet werden?
+                absolute_deviations = tf.abs(filtered_tensor)
+                absolute_deviations = tf.reduce_sum(absolute_deviations, 0)
 
                 # absolute deviations
-                absolute_deviations = tf.abs(summed_deviations)
+                #absolute_deviations = tf.abs(summed_deviations)
 
                 # case 1: l(x), |x| < 1
                 case1_sel_tensor = tf.less(absolute_deviations, 1)
@@ -248,8 +247,22 @@ with tf.variable_scope('rpn'):
 
                 return normalized_reg_loss
 
+            #def euclidian_loss(raw_deviations, selection_tensor):
+            # TODO: erroneous
+            #    activation_value = tf.constant(1.0, dtype=tf.float32)
+            #    filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
+            #    filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
+            #    filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
+            #    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
+            #                               filtered_tensor)
+            #    return tf.divide(tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.square(filtered_tensor), axis=0))), (VGG_FM_SIZE ** 2) * 9)
+
             raw_deviations = t_predicted - t_target
             rpn_reg_loss_normalized = smooth_l1_loss(raw_deviations, selection_tensor)
+            #rpn_reg_loss_normalized = euclidian_loss(raw_deviations, selection_tensor)
+            # TODO: Test and debug euclidian loss
+
+            # TODO: Problem: Box regression inaccurate, region proposals won´t sufficiently fit the ground truth boxes
 
     with tf.variable_scope('classification_head'):
         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, False, tf.nn.relu)
@@ -285,7 +298,16 @@ with tf.variable_scope('rpn'):
         overall_loss = rpn_cls_loss_normalized + REG_TO_CLS_LOSS_RATIO * rpn_reg_loss_normalized
 
     with tf.variable_scope('costs_and_optimization'):
-        rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
+        global_step = tf.Variable(0, trainable=False)
+        boundaries = [350, 500]
+        values = [0.001, 0.0001, 0.000001]
+        learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+
+        #rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
+        rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
+
+        #regularizer = tf.nn.l2_loss(weights)
+        #loss = tf.reduce_mean(loss + beta * regularizer)
 
 with tf.name_scope('fast_rcnn'):
     x = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_NUM * ROI_FM_SIZE**2])
@@ -321,13 +343,19 @@ if __name__ == "__main__":
         sess.run(tf.global_variables_initializer())
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
-        reg_loss_list = []
-        cls_loss_list = []
-        oal_loss_list = []
+        rp = None
+        cp = None
+        x_b = None
+        y_b = None
+        f = None
+        l = None
 
+        iter = 0
         for epoch in range(EPOCHS_TRAINSTEP1):
 
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
+
+
 
                 result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                 vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
@@ -335,26 +363,36 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol, rpreds, cpreds = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss, predicted_coordinates, clshead_conv1], feed_dict={X: vgg16_conv5_3_relu,
+                    _, tx, ty, tw, th,  px, py, pw, ph, rpreds, cpreds, lr, lc, ol = sess.run([rpn_train_op, target_x, target_y, target_w, target_h, predicted_x, predicted_y, predicted_w, predicted_h, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
-                                                        selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
+                                                          selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
 
-                    reg_loss_list.append(lr)
-                    cls_loss_list.append(lc)
-                    oal_loss_list.append(ol)
+                    f, l = first, last
+                    x_b = X_batch
+                    y_b = Y_batch
+                    rp = rpreds
+                    cp = cpreds
 
-                    print('reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                    iter += 1
+                    if iter % 15 == 0:
+                        print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
 
-        # plot cost development
-        import matplotlib.pyplot as plt
-        plt.figure()
-        plt.plot(reg_loss_list, label='reg loss')
-        plt.plot(cls_loss_list, label='cls loss')
-        plt.plot(oal_loss_list, label='overall loss')
-        plt.legend()
-        plt.show()
+
+        import pickle
+
+        with open('dump.pkl', 'wb') as file:
+            pickle.dump([x_b, y_b, rp, cp, train_ground_truth_tensor[f,:,:,:,:], train_selection_tensor[f,:,:,:,:,:], f, l], file)
+
+        ## plot cost development
+        ##import matplotlib.pyplot as plt
+        #plt.figure()
+        #plt.plot(reg_loss_list, label='reg loss')
+        #plt.plot(cls_loss_list, label='cls loss')
+        #plt.plot(oal_loss_list, label='overall loss')
+        #plt.legend()
+        #plt.show()
 
         # plot image, true boxes and predicted boxes
 

@@ -44,20 +44,37 @@ class Anchor(object):
         :param ground_truth_box: tuple with (class, x, y, w, h, angle, scale)
         :return: intersection over union
         '''
+        import numpy as np
+
         # calculate most upper-left (x1,y1) and bottom-right (x2,y2) pixel coordinates of
         # anchor and ground truth box
+        if self.w % 2 == 0:
+            x1_a = self.x - ((self.w / 2) - 1)
+            x2_a = self.x + (self.w / 2)
+            y1_a = self.y - ((self.h / 2) - 1)
+            y2_a = self.y + (self.h / 2)
+        else:
+            dw = np.floor(self.w/2)
+            dh = np.floor(self.h/2)
+            x1_a = self.x - dw
+            x2_a = self.x + dw
+            y1_a = self.y - dh
+            y2_a = self.y + dh
 
-        # TODO: Passt nicht, e.g. (x,y) = (1,1) w = 4 => x - 2 = -1
-        # TODO: gerade und ungerader Fall
-        x1_a = self.x - (self.w/2)
-        x2_a = self.x + (self.w/2)
-        y1_a = self.y - (self.h/2)
-        y2_a = self.y + (self.h/2)
         x_t, y_t, w_t, h_t = ground_truth_box.x, ground_truth_box.y, ground_truth_box.w, ground_truth_box.h
-        x1_t = x_t - (w_t/2)
-        x2_t = x_t + (w_t/2)
-        y1_t = y_t - (h_t/2)
-        y2_t = y_t + (h_t/2)
+
+        if w_t % 2 == 0:
+            x1_t = x_t - (w_t/2 - 1)
+            x2_t = x_t + (w_t/2)
+            y1_t = y_t - (h_t/2 - 1)
+            y2_t = y_t + (h_t/2)
+        else:
+            dw = np.floor(w_t / 2)
+            dh = np.floor(h_t / 2)
+            x1_a = x_t - dw
+            x2_a = x_t + dw
+            y1_a = y_t - dh
+            y2_a = y_t + dh
 
         if ~(x1_t > x2_a or x1_a > x2_t or y1_t > y2_a or y1_a > y2_t): # if anchor and ground truth box intersect
             # calculate coordinates of intersection rectangle
