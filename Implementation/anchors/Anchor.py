@@ -80,11 +80,8 @@ class Anchor(object):
 
         if len(self.intersectionsOfUnions) is not 0:
 
-<<<<<<< HEAD
-=======
             upper_threshold = 0.60
 
->>>>>>> 437e435a73b704eb9c447730c2bc2a7670d1f020
             for b in self.groundTruthBoxes:
 
                 iuo = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
