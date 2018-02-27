@@ -2,7 +2,7 @@ import pdb
 
 class Anchor(object):
 
-    def __init__(self, x, y, w, h, w_idx, h_idx, anchor_idx):
+    def __init__(self, x, y, w, h, w_idx, h_idx, anchor_idx, lower_threshold, upper_threshold):
         '''
 
         :param x:
@@ -22,6 +22,8 @@ class Anchor(object):
         self.w_idx = h_idx
         self.h_idx = w_idx
         self.anchor_idx = anchor_idx
+        self.lower_threshold = lower_threshold
+        self.upper_threshold = upper_threshold
 
         self.groundTruthBoxes = []
         self.intersectionsOfUnions = []
@@ -78,8 +80,6 @@ class Anchor(object):
 
         if len(self.intersectionsOfUnions) is not 0:
 
-            upper_threshold = 0.7
-
             for b in self.groundTruthBoxes:
 
                 iuo = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
@@ -88,7 +88,7 @@ class Anchor(object):
                 best_box = (b == self.groundTruthBoxes[self.intersectionsOfUnions.index(max(self.intersectionsOfUnions))])
                 best_anchor = (self == b.anchors[b.ious.index(max(b.ious))])
 
-                if max_iou_box < upper_threshold and best_anchor:
+                if max_iou_box < self.upper_threshold and best_anchor:
                     # special case: if a ground truth box exists where no anchor has an IoU >= 0.70 with the box
                     #               and the anchor at hand is from the perspective of the ground truth box the anchor
                     #               with the highest IoU then assign the ground truth box to the anchor at hand
@@ -96,18 +96,18 @@ class Anchor(object):
                     self.assigned_iou = iuo
                     self.type = 'positive'
 
-                elif iuo > upper_threshold and best_box:
+                elif iuo > self.upper_threshold and best_box:
                     # if the anchor has an IoU > 0.70 with the ground truth box and if this box is from the anchors
                     # point of view the box with the highest IoU then assign box to this anchor
                     self.assigned_ground_truth_box = b
                     self.assigned_iou = iuo
                     self.type = 'positive'
 
-                elif 0.3 <= max_iou_anchor < upper_threshold and best_box:
+                elif self.lower_threshold <= max_iou_anchor < self.upper_threshold and best_box:
                     self.type = 'neutral'
                     self.assigned_iou = iuo
 
-                elif max_iou_anchor < 0.3 and best_box:
+                elif max_iou_anchor < self.lower_threshold and best_box:
                     self.type = 'negative'
                     self.assigned_iou = iuo
 

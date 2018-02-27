@@ -25,7 +25,7 @@ MAX_NUM_IMGS = 10
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 2.0 # original mnist images size is 28x28
+MIN_SCALING = 0.5 # original mnist images size is 28x28
 MAX_SCALING = 2.0
 SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
@@ -39,11 +39,14 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [56, 56, 56]
+ANCHORS_SCALES = [56, 28, 14]
 ANCHORS_RATIOS = [1, 1, 1]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
+LOWER_THRESHOLD = 0.3
+UPPER_THRESHOLD = 0.7
 NUM_SELECTED_ANCHORS = 256
+
 
 # Fast R-CNN class variables
 ROI_FM_SIZE = 8
@@ -89,17 +92,23 @@ train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anc
                                                                        imgs=batcher.train_data, labels=train_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
                                                                        filename='train_anchors',
-                                                                       num_selected=NUM_SELECTED_ANCHORS)
+                                                                       num_selected=NUM_SELECTED_ANCHORS,
+                                                                       lower_threshold=LOWER_THRESHOLD,
+                                                                       upper_threshold=UPPER_THRESHOLD)
 valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                        imgs=batcher.valid_data, labels=valid_labels,
                                                                        load_last_anchors=LOAD_LAST_ANCHORS,
                                                                        filename='valid_anchors',
-                                                                       num_selected=NUM_SELECTED_ANCHORS)
+                                                                       num_selected=NUM_SELECTED_ANCHORS,
+                                                                       lower_threshold=LOWER_THRESHOLD,
+                                                                     upper_threshold=UPPER_THRESHOLD)
 test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
                                                                      imgs=batcher.test_data, labels=test_labels,
                                                                      load_last_anchors=LOAD_LAST_ANCHORS,
                                                                      filename='test_anchors',
-                                                                     num_selected=NUM_SELECTED_ANCHORS)
+                                                                     num_selected=NUM_SELECTED_ANCHORS,
+                                                                     lower_threshold=LOWER_THRESHOLD,
+                                                                     upper_threshold=UPPER_THRESHOLD)
 # These methods should return two tensors:
 # First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
 # Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS, IoU]),
@@ -119,9 +128,6 @@ valid_ground_truth_tensor = swapaxes(valid_ground_truth_tensor).reshape((NUM_COL
 valid_selection_tensor = swapaxes(valid_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
 test_ground_truth_tensor = swapaxes(test_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
-
-# TODO: Problem --> only very few anchors show ioU > 0.7 --> possible causes:
-# TODO: 1. inadequate scale of mnist images on collages, 2. inadequate scale of anchors, 3. too coarse feature map
 
 # TODO: NMS
 
@@ -244,8 +250,6 @@ with tf.variable_scope('rpn'):
 
             raw_deviations = t_predicted - t_target
             rpn_reg_loss_normalized = smooth_l1_loss(raw_deviations, selection_tensor)
-            # TODO: Box regression produces stable error, possible reasons: 1. error in implementation, 2. error in anchor tensor production,
-            # TODO: 3. feature map too small or anchor scales do not fit ground truth boxes
 
     with tf.variable_scope('classification_head'):
         clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS*2], 1, False, tf.nn.relu)
@@ -274,7 +278,7 @@ with tf.variable_scope('rpn'):
             targets_filtered = tf.concat([tf.multiply(tmp4, tf.cast(idxi, tf.float32)), tf.multiply(tmp4, tf.cast(idx, tf.float32))], axis=1)
 
             # calculate the cross entropy loss
-            rpn_cls_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
+            rpn_cls_loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
             rpn_cls_loss_normalized = tf.divide(rpn_cls_loss, NUM_SELECTED_ANCHORS)
 
     with tf.name_scope('overall_loss'):
@@ -317,6 +321,10 @@ if __name__ == "__main__":
         sess.run(tf.global_variables_initializer())
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
+        reg_loss_list = []
+        cls_loss_list = []
+        oal_loss_list = []
+
         for epoch in range(EPOCHS_TRAINSTEP1):
 
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
@@ -327,10 +335,29 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
+                    _, lr, lc, ol, rpreds, cpreds = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss, predicted_coordinates, clshead_conv1], feed_dict={X: vgg16_conv5_3_relu,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
                                                         selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
+
+                    reg_loss_list.append(lr)
+                    cls_loss_list.append(lc)
+                    oal_loss_list.append(ol)
+
                     print('reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
-                    #pdb.set_trace()
+
+        # plot cost development
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(reg_loss_list, label='reg loss')
+        plt.plot(cls_loss_list, label='cls loss')
+        plt.plot(oal_loss_list, label='overall loss')
+        plt.legend()
+        plt.show()
+
+        # plot image, true boxes and predicted boxes
+
+
+
+

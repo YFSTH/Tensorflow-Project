@@ -2,7 +2,7 @@ import pdb
 from anchors.debugging_module import *
 from anchors.anchors_selection import *
 
-def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, filename, num_selected):
+def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, filename, num_selected, lower_threshold, upper_threshold):
     '''
     This function discriminates between positive, negative and neutral anchors and additionally
     assigns for each image to each positive anchor the optimal ground truth box (if such a box exists)
@@ -52,7 +52,7 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
                         y = anchor_tensor[anchor_index+num_anchors, w_idx, h_idx]
                         w = anchor_tensor[anchor_index+num_anchors*2, w_idx, h_idx]
                         h = anchor_tensor[anchor_index+num_anchors*3, w_idx, h_idx]
-                        anchor_objects.append(Anchor(x, y, w, h, w_idx, h_idx, anchor_index))
+                        anchor_objects.append(Anchor(x, y, w, h, w_idx, h_idx, anchor_index, lower_threshold, upper_threshold))
 
             # (get labels of specific collage)
             mnist_imgs = labels[collage]

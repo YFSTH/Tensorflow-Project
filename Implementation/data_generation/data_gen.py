@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pdb
 
+
 def get_mnist():
     """
     Loads mnist data.
@@ -15,6 +16,7 @@ def get_mnist():
     test_imgs  = mnist.test.images # 10000
     test_labels = mnist.test.labels
     return train_imgs, train_labels, valid_imgs, valid_labels, test_imgs, test_labels
+
 
 def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_imgs=3, replacement=True,
                     allow_overhang=True, background='black',
@@ -204,6 +206,8 @@ def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_im
             with open('data_generation/'+targets_filename, 'wb') as f:
                     pickle.dump(targets[dataset[0]], f)
 
+            print(str(name)+' augmented mnist collages were created')
+
 
 def create_frame(frame_size, background):
     """
@@ -220,6 +224,7 @@ def create_frame(frame_size, background):
     else:
         tmp = abs(np.random.normal(0,1,(frame_size, frame_size)))
         return (tmp / np.max(tmp))
+
 
 def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30, rotation_steps=7, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
     """
@@ -269,8 +274,6 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
                     scales.append(scale)
                     angles.append(angle)
 
-            print(i1,'/',imgs.shape[0])
-
         # save dataset to disk
         with open('data_generation/'+file1_name, 'wb') as f:
             pickle.dump(augmented_imgs, f)
@@ -280,6 +283,9 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
             pickle.dump(scales, f)
         with open('data_generation/'+file4_name, 'wb') as f:
             pickle.dump(labels, f)
+
+        print(str(name) + ' mnist images were created')
+
     else:
         # load already existing data set
         import pickle
@@ -291,8 +297,11 @@ def augment_mnist(imgs, name, labels, counterclock_angle=30, clockwise_angle=30,
             scales = pickle.load(file)
         with open('data_generation/'+file4_name, 'rb') as file:
             labels = pickle.load(file)
-    #for i in range(len(augmented_imgs)): plt.imshow(augmented_imgs[i]);plt.show();print(labels[i])
+
+        print(str(name) + ' augmented mnist images were loaded')
+
     return np.array(augmented_imgs), np.array(labels), np.array(angles), np.array(scales)
+
 
 def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
     """
@@ -314,6 +323,7 @@ def rotation_sequence(img, counterclock_angle=30, clockwise_angle=30, steps=7):
         seq.append(rotate(img, a))
 
     return seq, angles
+
 
 def scale_pyramid(img, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
     """
