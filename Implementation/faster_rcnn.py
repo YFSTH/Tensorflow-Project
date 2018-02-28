@@ -47,9 +47,8 @@ LOWER_THRESHOLD = 0.3
 UPPER_THRESHOLD = 0.7
 NUM_SELECTED_ANCHORS = 256
 
-
 # Fast R-CNN class variables
-ROI_FM_SIZE = 5
+ROI_FM_SIZE = 8
 NUM_CLASSES = 10
 
 # RPN
@@ -71,13 +70,8 @@ train_labels = batcher.train_labels
 valid_labels = batcher.valid_labels
 test_labels  = batcher.test_labels
 
-# For debugging: Examine image and labels of batches
-#for x,y in batcher.get_batch(4):
-#    pdb.set_trace()
-
 
 # Create anchor tensor
-
 anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
 # shape: 4D, (batchsize, num_anchors*4, feature map height, feature map width)
 # Note:
@@ -146,6 +140,12 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 
 ### Data Flow Graph Construction Phase ################################################################################
 
+### ImageNet
+
+X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
+vgg16 = VGG16()
+vgg16.build(X)
+
 
 ### Region Proposal Network RPN
 
@@ -153,7 +153,7 @@ with tf.variable_scope('rpn'):
 
     with tf.name_scope('placeholders'):
 
-        X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
+        #X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
         Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
         # TODO: Might be sufficient to just hand over the classes of the single mnist images
         anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
@@ -162,7 +162,7 @@ with tf.variable_scope('rpn'):
 
     with tf.variable_scope('pre_heads_layer'):
 
-        prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False, tf.nn.relu)
+        prehead_conv = convolutional(vgg16.conv5_3, [3, 3, 512, 512], 1, False, tf.nn.relu)
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.name_scope('regression_head'):
@@ -332,12 +332,6 @@ with tf.name_scope('fast_rcnn'):
 
 if __name__ == "__main__":
 
-    # Load pretrained VGG16 and get handle on input placeholder
-    inputs = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
-    vgg16 = VGG16()
-    vgg16.build(inputs)
-
-    # read out last pooling layer
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
@@ -357,13 +351,13 @@ if __name__ == "__main__":
 
 
 
-                result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-                vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
+                #result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+                #vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={X: X_batch})
 
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-                    _, tx, ty, tw, th,  px, py, pw, ph, rpreds, cpreds, lr, lc, ol = sess.run([rpn_train_op, target_x, target_y, target_w, target_h, predicted_x, predicted_y, predicted_w, predicted_h, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: vgg16_conv5_3_relu,
+                    _, tx, ty, tw, th,  px, py, pw, ph, rpreds, cpreds, lr, lc, ol = sess.run([rpn_train_op, target_x, target_y, target_w, target_h, predicted_x, predicted_y, predicted_w, predicted_h, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: X_batch,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
                                                           groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
@@ -395,7 +389,3 @@ if __name__ == "__main__":
         #plt.show()
 
         # plot image, true boxes and predicted boxes
-
-
-
-
