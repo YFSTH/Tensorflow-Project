@@ -54,7 +54,7 @@ NUM_CLASSES = 10
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 20
+EPOCHS_TRAINSTEP1 = 1
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 
@@ -163,12 +163,8 @@ with tf.variable_scope('rpn'):
         selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3])
 
     with tf.variable_scope('pre_heads_layer'):
-
-<<<<<<< HEAD
-        prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False, RPN_ACTFUN)
-=======
+        #prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False, RPN_ACTFUN)
         prehead_conv = convolutional(vgg16.conv5_3, [3, 3, 512, 512], 1, False, tf.nn.relu)
->>>>>>> efe2a3d3c4e89ee601087415734091463307f5ac
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.name_scope('regression_head'):
@@ -380,6 +376,9 @@ if __name__ == "__main__":
         cp = None
         x_b = None
         y_b = None
+        vx_b = None
+        vy_b = None
+        vrpreds = None
         f = None
         l = None
         tx_ = None
@@ -405,7 +404,10 @@ if __name__ == "__main__":
         lr_list = []
         lc_list = []
         oa_list = []
-        
+        vlr_list = []
+        vlc_list = []
+        voa_list = []
+
         for epoch in range(EPOCHS_TRAINSTEP1):
 
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
@@ -418,31 +420,32 @@ if __name__ == "__main__":
                 # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
 
                 if BATCH_SIZE == 1:
-<<<<<<< HEAD
+
                     _, tpreds, tpx, tpy, tpw, tph, rpreds, px, py, pw, ph, ttargs, tx, ty, tw, th, gtc, tarx, tary, tarw, tarh, cpreds, lr, lc, ol = sess.run([rpn_train_op, t_predicted, t_predicted_x, t_predicted_y, t_predicted_w, t_predicted_h,
                                                                                                                predicted_coordinates, predicted_x, predicted_y, predicted_w, predicted_h, 
                                                                                                                t_target, t_target_x, t_target_y, t_target_w, t_target_h, 
                                                                                                                groundtruth_coordinates, target_x, target_y, target_w, target_h,
                                                                                                                clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], 
-                                                                                                              feed_dict={X: vgg16_conv5_3_relu,
+                                                                                                              feed_dict={X: X_batch,
                                                                                                                          Y: Y_batch,
                                                                                                                          anchor_coordinates: anchors[first],
                                                                                                                          groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
                                                                                                                          selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
 
-                    
-=======
-                    _, tx, ty, tw, th,  px, py, pw, ph, rpreds, cpreds, lr, lc, ol = sess.run([rpn_train_op, target_x, target_y, target_w, target_h, predicted_x, predicted_y, predicted_w, predicted_h, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss], feed_dict={X: X_batch,
-                                                          Y: Y_batch,
-                                                          anchor_coordinates: anchors[first],
-                                                          groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
-                                                          selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
+                    vlr, vlc, vol, vrpreds = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss, predicted_coordinates],
+                                                  feed_dict={X: np.array(batcher.valid_data[first]).reshape((1,256,256,3)),
+                                                             Y: np.array(batcher.valid_labels[first]).reshape((1,5,7)),
+                                                             anchor_coordinates: anchors[first],
+                                                             groundtruth_coordinates: valid_ground_truth_tensor[first],
+                                                             selection_tensor: valid_selection_tensor[first]})
 
->>>>>>> efe2a3d3c4e89ee601087415734091463307f5ac
                     f, l = first, last
+                    vx_b = batcher.valid_data[first]
+                    vy_b = batcher.valid_labels[first]
                     x_b = X_batch
                     y_b = Y_batch
                     rp = rpreds
+                    vrp = vrpreds
                     cp = cpreds
                     tx_ = tx
                     ty_ = ty
@@ -464,16 +467,19 @@ if __name__ == "__main__":
                     lr_list.append(lr)
                     lc_list.append(lc)
                     oa_list.append(ol)
+                    vlr_list.append(vlr)
+                    vlc_list.append(vlc)
+                    voa_list.append(vol)
 
                     iter += 1
                     if iter % 10 == 0:
-                        print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                        print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'vreg l.:', vlr, 'vcls l.:',vlc,'voa l.:', vol)
 
 
         import pickle
 
         with open('dump.pkl', 'wb') as file:
-            pickle.dump([x_b, y_b, rp, cp, tx_, ty_, tw_, th_, px_, py_, pw_, ph_, ttgs, tpx_, tpy_, tpw_, tph_, tarx_, tary_, tarw_, tarh_, train_ground_truth_tensor[f,:,:,:,:], train_selection_tensor[f,:,:,:,:,:], lr_list, lc_list, oa_list, f, l], file)
+            pickle.dump([vx_b, vy_b, vrpreds, vlr_list, vlc_list, voa_list, x_b, y_b, rp, cp, tx_, ty_, tw_, th_, px_, py_, pw_, ph_, ttgs, tpx_, tpy_, tpw_, tph_, tarx_, tary_, tarw_, tarh_, train_ground_truth_tensor[f,:,:,:,:], train_selection_tensor[f,:,:,:,:,:], lr_list, lc_list, oa_list, f, l], file)
 
         ## plot cost development
         ##import matplotlib.pyplot as plt
