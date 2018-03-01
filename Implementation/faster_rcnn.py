@@ -4,6 +4,7 @@
 import os
 import pdb
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
@@ -144,9 +145,12 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 
 ### ImageNet
 
-X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
-vgg16 = VGG16()
-vgg16.build(X)
+with tf.variable_scope('imagenet'):
+
+    X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
+    Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
+    vgg16 = VGG16()
+    vgg16.build(X)
 
 
 ### Region Proposal Network RPN
@@ -156,7 +160,7 @@ with tf.variable_scope('rpn'):
     with tf.name_scope('placeholders'):
 
         #X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
-        Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
+        #Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
         # TODO: Might be sufficient to just hand over the classes of the single mnist images
         anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
         groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
@@ -345,20 +349,19 @@ with tf.variable_scope('rpn'):
         #loss = tf.reduce_mean(loss + beta * regularizer)
 
 with tf.name_scope('fast_rcnn'):
-    x = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_NUM * ROI_FM_SIZE**2])
-    y = tf.placeholder(tf.float32, [BATCH_SIZE, NUM_CLASSES])
-
-    with tf.variable_scope('fc6'):
-        fc6 = fully_connected(x, 4096, False, tf.nn.relu)
-    with tf.variable_scope('fc7'):
-        fc7 = fully_connected(fc6, 4096, False, tf.nn.relu)
-    with tf.variable_scope('cls_fc'):
-        cls_fc = fully_connected(fc7, 10, False, tf.nn.relu)
-    with tf.variable_scope('reg_fc'):
-        reg_fc = fully_connected(fc7, 40, False, tf.nn.relu)
-    with tf.variable_scope('cls_out'):
-        cls_out = fully_connected(cls_fc, 10, False, None)
-        cls_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=cls_fc))
+    with tf.variable_scope('roi_pooling'):
+        pool5 = roi_pooling(vgg16.conv5_3, [6, 2, 5, 9], [8, 8])    # TODO: Replace proposals
+    with tf.variable_scope('layer_6'):
+        fc6 = fully_connected(tf.reshape(pool5, [-1, np.prod(pool5.shape[1:])]), 4096, False, tf.nn.relu)
+    with tf.variable_scope('layer_7'):
+        fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+    with tf.variable_scope('cls_score'):
+        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+    with tf.variable_scope('bbox_pred'):
+        bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
+    with tf.variable_scope('cls_prob'):
+        cls_prob = fully_connected(cls_score, 10, False, None)
+        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(Y[:, 0, 0], tf.int64), logits=cls_prob))
     # TODO: Implement loss for regression
 
 
