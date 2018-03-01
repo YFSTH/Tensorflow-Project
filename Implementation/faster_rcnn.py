@@ -12,8 +12,8 @@ from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
 from data_generation.data_gen import *
 from network.layers import convolutional, fully_connected, roi_pooling
+from optimizers.AMSgrad import AMSGrad
 from vgg16.vgg16 import VGG16
-from Optimizers.AMSGrad import *
 
 
 # Set class variables
@@ -54,7 +54,7 @@ NUM_CLASSES = 10
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 1
+EPOCHS_TRAINSTEP1 = 2
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 
