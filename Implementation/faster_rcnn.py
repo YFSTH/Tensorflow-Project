@@ -324,26 +324,25 @@ with tf.name_scope('model_initializers'):
 ### Execution Phase ###################################################################################################
 
 if __name__ == "__main__":
+#
+    with tf.Session() as sess:
 
-    with tf.Session() as session:
-
-            # Initialize xor restore the required sub-models
-        def restore_xor_init(restore, saver, path, initil):
-            saver.restore(session, path) if restore else session.run(initil)
+        # Initialize xor restore the required sub-models
+        restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
         restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
         if ~RESTORE_VGG:
-            session.run(vgg_init)
-        #print(vgg16.conv1_1_filters)
+            sess.run(vgg_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        iter = 0
 
         iter = 0
         for epoch in range(EPOCHS_TRAINSTEP1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
                 if BATCH_SIZE == 1:
 
-                    _ = session.run([rpn_train_op],
+                    _ = sess.run([rpn_train_op],
                                               feed_dict={X: X_batch,
                                                          Y: Y_batch,
                                                          anchor_coordinates: anchors[first],
@@ -353,12 +352,8 @@ if __name__ == "__main__":
                         print('iteration:', iter)#, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
 
-        if STORE_RPN:
-            filename = 'rpn.ckpt'
-            rpn_saver.save(session, CKPT_PATH + filename)
+        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        storer(STORE_FAST, fast_saver, 'fast.ckpt')
         if STORE_VGG:
-            filename = 'vgg16.npy'
-            vgg16.save_npy(session, CKPT_PATH + filename)
-        if STORE_FAST:
-            filename = 'fast.ckpt'
-            rpn_saver.save(session, CKPT_PATH + filename)
+            vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
