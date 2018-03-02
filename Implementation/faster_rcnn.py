@@ -8,7 +8,6 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
@@ -59,6 +58,17 @@ REG_TO_CLS_LOSS_RATIO = 10
 EPOCHS_TRAINSTEP1 = 10
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.relu
+CKPT_PATH = './checkpoints/'
+STORE_RPN = True
+RESTORE_RPN = False
+RPN_PATH = './checkpoints/rpn.ckpt'
+STORE_VGG = True
+RESTORE_VGG = False
+VGG_PATH = './checkpoints/vgg16.ckpt'
+STORE_FAST = True
+RESTORE_FAST = False
+FAST_PATH = './checkpoints/fast_rcnn.ckpt'
+
 
 # TODO: Employ regularization
 
@@ -114,11 +124,10 @@ test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_ancho
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
 
+
 # swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN
 # and add length 1 zero dimension
-
 swapaxes = lambda x: np.swapaxes(np.swapaxes(x, 1, 2), 2, 3)
-
 anchors = swapaxes(anchors).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 train_ground_truth_tensor = swapaxes(train_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 train_selection_tensor = swapaxes(train_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
@@ -127,27 +136,12 @@ valid_selection_tensor = swapaxes(valid_selection_tensor).reshape((NUM_COLLAGES,
 test_ground_truth_tensor = swapaxes(test_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
 
-# TODO: NMS
-
-# Debugging the ground truth and selection tensor II
-#import matplotlib.pyplot as plt
-#for img in range(5):
-#    plt.imshow(batcher.train_data[img,:,:])
-#    plt.show()
-#    print(train_labels[img])
-#    for j in range(2):
-#        print(train_ground_truth_tensor[img,j,:,:])
-#        print(train_selection_tensor[img,j,:,:,0])
-
-#pdb.set_trace()
-
 
 ### Data Flow Graph Construction Phase ################################################################################
 
 ### ImageNet
 
 with tf.variable_scope('imagenet'):
-
     X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
     Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
     vgg16 = VGG16()
@@ -159,52 +153,34 @@ with tf.variable_scope('imagenet'):
 with tf.variable_scope('rpn'):
 
     with tf.name_scope('placeholders'):
-
-        #X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
-        #Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
-        # TODO: Might be sufficient to just hand over the classes of the single mnist images
         anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
         groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
         selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3])
 
     with tf.variable_scope('pre_heads_layer'):
-        #prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False, RPN_ACTFUN)
-        prehead_conv = convolutional(vgg16.conv5_3, [3, 3, 512, 512], 1, False, tf.nn.relu)
+        prehead_conv = convolutional(vgg16.conv5_3, [3, 3, 512, 512], 1, False, RPN_ACTFUN)
         # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.name_scope('regression_head'):
-
         with tf.variable_scope('predictions'):
-
             predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, False)
             # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36)
 
         with tf.variable_scope('regression_parametrization'):
-
             # perform boxregression parametrization by transforming the coordinates and width and height to yield the
             # predicted and true (=target) coordinate parameters used for the regression loss
-            anchors_x = anchor_coordinates[:, :, :, 0:9]
-            anchors_y = anchor_coordinates[:, :, :, 9:18]
-            anchors_w = anchor_coordinates[:, :, :, 18:27]
-            anchors_h = anchor_coordinates[:, :, :, 27:36]
-            predicted_x = predicted_coordinates[:, :, :, 0:9]
-            predicted_y = predicted_coordinates[:, :, :, 9:18]
-            predicted_w = predicted_coordinates[:, :, :, 18:27]
-            predicted_h = predicted_coordinates[:, :, :, 27:36]
-            target_x = groundtruth_coordinates[:, :, :, 0:9]
-            target_y = groundtruth_coordinates[:, :, :, 9:18]
-            target_w = groundtruth_coordinates[:, :, :, 18:27]
-            target_h = groundtruth_coordinates[:, :, :, 27:36]
-            t_predicted_x = tf.truediv(tf.subtract(predicted_x, anchors_x), anchors_w)
-            t_predicted_y = tf.truediv(tf.subtract(predicted_y, anchors_y), anchors_h)
-            t_predicted_w = tf.log(tf.truediv(predicted_w, anchors_w))
-            t_predicted_h = tf.log(tf.truediv(predicted_h, anchors_h))
-            t_predicted = tf.concat([t_predicted_x, t_predicted_y, t_predicted_w, t_predicted_h], 0)
-            t_target_x = tf.truediv(tf.subtract(target_x, anchors_x), anchors_w)
-            t_target_y = tf.truediv(tf.subtract(target_y, anchors_y), anchors_h)
-            t_target_w = tf.log(tf.truediv(target_w, anchors_w))
-            t_target_h = tf.log(tf.truediv(target_h, anchors_h))
-            t_target = tf.concat([t_target_x, t_target_y, t_target_w, t_target_h], 0)
+            x_xor_y = lambda t1, t2, t3: tf.divide(tf.subtract(t1, t2), t3)
+            w_xor_h = lambda t1, t2: tf.log(tf.divide(t1, t2))
+            t_x = x_xor_y(predicted_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
+            t_y = x_xor_y(predicted_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
+            t_w = w_xor_h(predicted_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
+            t_h = w_xor_h(predicted_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
+            t_predicted = tf.concat([t_x, t_y, t_w, t_h], axis=0)
+            t_x = x_xor_y(groundtruth_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
+            t_y = x_xor_y(groundtruth_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
+            t_w = w_xor_h(groundtruth_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
+            t_h = w_xor_h(groundtruth_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
+            t_target = tf.concat([t_x, t_y, t_w, t_h], axis=0)
             # t_target and t_predicted should have shape (4, feature map size, feature map size, number of anchors)
 
             with tf.variable_scope('regression_loss'):
@@ -214,21 +190,14 @@ with tf.variable_scope('rpn'):
                     activation_value = tf.constant(1.0, dtype=tf.float32)
                     filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
                     # filter plane shape: (1, 16, 16, 9)
-
                     filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
-
                     filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
-
                     filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
                                                filtered_tensor)
 
                     # calculate the smooth l1 loss
-
-                    # sum up deviations for the four coordinates per anchor
-
                     absolute_deviations = tf.abs(filtered_tensor)
                     # shape: (4, 16, 16, 9)
-
                     # case 1: l(x), |x| < 1
                     case1_sel_tensor = tf.less(absolute_deviations, 1)
                     # shape: (4, 16, 16, 9)
@@ -236,7 +205,6 @@ with tf.variable_scope('rpn'):
                     # shape: (4, 16, 16, 9)
                     case1_output = tf.multiply(tf.square(case1_deviations), 0.5)
                     # shape: (4, 16, 16, 9)
-
                     # case 2: otherwise
                     case2_sel_tensor = tf.greater_equal(absolute_deviations, 1)
                     # shape: (4, 16, 16, 9)
@@ -244,40 +212,15 @@ with tf.variable_scope('rpn'):
                     # shape: (4, 16, 16, 9)
                     case2_output = tf.multiply(case2_output, tf.cast(case2_sel_tensor, tf.float32))
                     # shape: (4, 16, 16, 9)
-
                     smooth_anchor_losses = case1_output + case2_output
                     # shape: (4, 16, 16, 9)
-
                     unnormalized_reg_loss = tf.reduce_sum(smooth_anchor_losses)
-
                     normalized_reg_loss = tf.truediv(unnormalized_reg_loss, tf.cast((VGG_FM_SIZE ** 2) * 9, tf.float32))
 
                     return normalized_reg_loss
 
-
-                # def euclidian_loss(raw_deviations, selection_tensor):
-                # TODO: erroneous
-                #    activation_value = tf.constant(1.0, dtype=tf.float32)
-                #    filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
-                #    filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
-                #    filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
-                #    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
-                #                               filtered_tensor)
-                #    return tf.divide(tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.square(filtered_tensor), axis=0))), (VGG_FM_SIZE ** 2) * 9)
-
-                # def l1_loss(raw_deviations, selection_tensor):
-                #   activation_value = tf.constant(1.0, dtype=tf.float32)
-                #    filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
-                #    filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
-                #    filtered_tensor = tf.abs(tf.multiply(raw_deviations, filter_tensor))
-                #    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor), filtered_tensor)
-                #    return tf.divide(tf.reduce_sum(filtered_tensor), tf.cast((VGG_FM_SIZE ** 2) * 9, tf.float32))
-
                 raw_deviations = tf.subtract(t_predicted, t_target)
                 rpn_reg_loss_normalized = smooth_l1_loss(raw_deviations, selection_tensor)
-                # rpn_reg_loss_normalized = l1_loss(raw_deviations, selection_tensor)
-
-                # TODO: Predictions nähern sich Nutzbarkeit => Finetuning -> AMSGrad, AdaGrad, RMSProp, Nesterov & Vanilla Momentum
 
         with tf.variable_scope('classification_head'):
             clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS * 2], 1, False, RPN_ACTFUN)
@@ -290,17 +233,12 @@ with tf.variable_scope('rpn'):
                 reshaped_targets = tf.reshape(selection_tensor[:, :, :, :, 0],
                                               [BATCH_SIZE * VGG_FM_SIZE * VGG_FM_SIZE * NUM_ANCHORS, 1])
                 # shape: (Batch size * fm size * fm size, 1)
-
                 inclusion_idxs = tf.greater_equal(reshaped_targets, 0)
-                # TODO: Hier wurde auf andere Methode zurückgegriffen, als oben: boolean mask statt Multiplikation, dann kein
-                # TODO: ... reshape notwendig
                 # 256 True, rest False
-
                 tmp2 = tf.boolean_mask(tf.reshape(logits[:, 0], [tf.shape(logits)[0], 1]), inclusion_idxs)
                 tmp3 = tf.boolean_mask(tf.reshape(logits[:, 1], [tf.shape(logits)[0], 1]), inclusion_idxs)
                 logits_filtered = tf.concat(
                     [tf.reshape(tmp2, [tf.shape(tmp2)[0], 1]), tf.reshape(tmp3, [tf.shape(tmp3)[0], 1])], axis=1)
-
                 # filter label entries according to the filtered logits
                 sampled_targets = tf.reshape(tf.boolean_mask(reshaped_targets, inclusion_idxs), [tf.shape(tmp3)[0], 1])
                 tmp4 = tf.ones_like(sampled_targets)
@@ -356,16 +294,14 @@ with tf.variable_scope('rpn'):
             boundaries = [1200, 1600]
             values = [0.001, 0.0001, 0.000005]
             learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
-
-            # rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
-            # rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
             # rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
             rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
-            # AMSGrad = AMSGrad(learning_rate)
-            # rpn_train_op = AMSGrad.minimize(overall_loss, global_step=global_step)
 
             # regularizer = tf.nn.l2_loss(weights)
             # loss = tf.reduce_mean(loss + beta * regularizer)
+
+
+### Fast R-CNN
 
 with tf.name_scope('fast_rcnn'):
     with tf.variable_scope('roi_pooling'):
@@ -384,6 +320,22 @@ with tf.name_scope('fast_rcnn'):
     # TODO: Implement loss for regression
 
 
+### Model saving nodes
+
+with tf.name_scope('model_savers'):
+    vgg_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
+    rpn_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
+    fast_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
+
+### Model initialization nodes
+
+with tf.name_scope('model_initializers'):
+    init = tf.global_variables_initializer()
+    vgg16_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='vgg16'))
+    rpn_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
+    fast_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
+
+
 ### Execution Phase ###################################################################################################
 
 
@@ -391,136 +343,45 @@ if __name__ == "__main__":
 
     with tf.Session() as sess:
 
-        sess.run(tf.global_variables_initializer())
+        # Initialize xor restore the required sub-models
+        with tf.Session() as sess:
+            if RESTORE_VGG:
+                vgg_saver.restore(sess, VGG_PATH)
+            else:
+                sess.run(vgg16_init)
+            if RESTORE_RPN:
+                rpn_saver.restore(sess, RPN_PATH)
+            else:
+                sess.run(rpn_init)
+            if RESTORE_FAST:
+                fast_saver.restore(sess, FAST_PATH)
+            else:
+                sess.run(fast_init)
+
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
-        rp = None
-        vrp = None
-        cp = None
-        x_b = None
-        y_b = None
-        vx_b = None
-        vy_b = None
-        vrpreds = None
-        f = None
-        f_list = []
-        l = None
-        tx_ = None
-        ty_ = None
-        tw_ = None
-        th_ = None
-        px_ = None
-        py_ = None
-        pw_ = None
-        ph_ = None
-        ttgs = None
-        tpx_ = None
-        tpy_ = None
-        tpw_ = None
-        tph_ = None
-        tarx_ = None
-        tary_ = None
-        tarw_ = None
-        tarh_ = None
-        vcp = None
-
-        iter = 0
-
-        lr_list = []
-        lc_list = []
-        oa_list = []
-        vlr_list = []
-        vlc_list = []
-        voa_list = []
 
         for epoch in range(EPOCHS_TRAINSTEP1):
-
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
-
-
-
-                #result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-                #vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={X: X_batch})
-
-                # output of VGG16 will be of shape (BATCHSIZE, 8, 8, 512)
-
                 if BATCH_SIZE == 1:
-
-                    _, tx, ty, tw, th,  px, py, pw, ph, rpreds, cpreds, lr, lc, ol = sess.run([rpn_train_op, target_x, target_y, target_w, target_h, predicted_x, predicted_y, predicted_w, predicted_h, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
                                                feed_dict={X: X_batch,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
-                                                          groundtruth_coordinates: train_ground_truth_tensor[first],#.reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
-                                                          selection_tensor: train_selection_tensor[first]})#..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
-
-                    if iter == EPOCHS_TRAINSTEP1 * 100 - 1:
-                        vlr, vlc, vol, vrpreds, vcpreds = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss, predicted_coordinates, clshead_conv1],
-                                                      feed_dict={X: X_batch,
-                                                                 Y: np.array(batcher.valid_labels[first]).reshape((1,10,7)),
-                                                                 anchor_coordinates: anchors[first],
-                                                                 groundtruth_coordinates: valid_ground_truth_tensor[first],
-                                                                 selection_tensor: valid_selection_tensor[first]})
-
-                    # values = sess.run(trainable_vars)
-                    # print(values)
-
-                        vx_b = batcher.valid_data[first]
-                        vy_b = batcher.valid_labels[first]
-                        vrp = vrpreds
-                        vcp = vcpreds
-                        vlr_list.append(vlr)
-                        vlc_list.append(vlc)
-                        voa_list.append(vol)
-
+                                                          groundtruth_coordinates: train_ground_truth_tensor[first],
+                                                          selection_tensor: train_selection_tensor[first]})
                     if iter % 10 == 0:
                         print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
-
-                    # if iter == 0:
-                    #    for k, v in zip(variables_names, values):
-                    #        print("Variable: ", k)
-                    #        print("Shape: ", v.shape)
-                    #        print(v)
-
-                    f, l = first, last
-                    f_list.append(f)
-
-                    x_b = X_batch
-                    y_b = Y_batch
-                    rp = rpreds
-                    cp = cpreds
-                    tx_ = tx
-                    ty_ = ty
-                    tw_ = tw
-                    th_ = th
-                    px_ = px
-                    py_ = py
-                    pw_ = pw
-                    ph_ = ph
-                    #ttgs = ttargs
-                    #tpx_ = tpx
-                    #tpy_ = tpy
-                    #tpw_ = tpw
-                    #tph_ = tph
-                    #tarx_ = tarx
-                    #tary_ = tary
-                    #tarw_ = tarw
-                    #tarh_ = tarh
-                    lr_list.append(lr)
-                    lc_list.append(lc)
-                    oa_list.append(ol)
-
                     iter += 1
 
-                with open('dump.pkl', 'wb') as file:
-                     pickle.dump(
-                        [f_list, batcher.train_data, batcher.train_labels, batcher.valid_data, batcher.valid_labels, valid_ground_truth_tensor[f, :, :, :, :], valid_selection_tensor[f, :, :, :, :, :], vx_b, vy_b, vrp,
-                         vcp, vlr_list, vlc_list, voa_list, x_b, y_b, rp, cp, tx_, ty_, tw_, th_, px_, py_, pw_, ph_,
-                         train_ground_truth_tensor[f, :, :, :, :],
-                         train_selection_tensor[f, :, :, :, :, :], lr_list, lc_list, oa_list, f, l], file)
-                    #pickle.dump(
-                    #    [x_b, y_b, rp, cp, tx_, ty_, tw_, th_, px_, py_, pw_, ph_, ttgs, tpx_, tpy_, tpw_, tph_, tarx_,
-                    #     tary_, tarw_, tarh_, train_ground_truth_tensor[f, :, :, :, :],
-                    #     train_selection_tensor[f, :, :, :, :, :], lr_list, lc_list, oa_list, f, l], file)
-                    #    vgtt,                                  vslt,                                 vx_b, vy_b, vrpreds, vcpreds, vlr_list, vlc_list, voa_list, imgs, labels, preds, cp, tx_, ty_, tw_, th_, px_, py_, pw_, ph_, ttgs, tpx_, tpy_, tpw_, tph_, tarx_, tary_, tarw_, tarh_, gtt,                   slt,                            reg_loss_list, cls_loss_list, oal_loss_list, f, l
 
-        # plot image, true boxes and predicted boxes
+        if STORE_RPN:
+            filename = 'rpn.ckpt'
+            rpn_saver.save(sess, CKPT_PATH + filename)
+        if STORE_VGG:
+            filename = 'vgg.ckpt'
+            rpn_saver.save(sess, CKPT_PATH + filename)
+        if STORE_FAST:
+            filename = 'fast.ckpt'
+            rpn_saver.save(sess, CKPT_PATH + filename)
+
