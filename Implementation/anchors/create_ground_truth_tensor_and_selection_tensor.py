@@ -72,8 +72,8 @@ def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth
 
     # Testing/ debugging purposes:
     print('positive anchors:', positive_anchors)
-    #print('negative anchors:', negative_anchors)
-    #print('neutral anchors:', neutral_anchors)
+    print('negative anchors:', negative_anchors)
+    print('neutral anchors:', neutral_anchors)
 
     return gtb_tensor, sel_tensor
 

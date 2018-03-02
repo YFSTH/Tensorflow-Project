@@ -171,8 +171,8 @@ def create_collages(num_collages=5, collage_size=128, min_num_imgs=1, max_num_im
                         collage_frame[xindx:xindx+s,yindx:yindx+s] += img[1]
 
                         # prepare label including number, position x, y and width and height
-                        x = int(xindx+(s/2))
-                        y = int(yindx+(s/2))
+                        x = int(xindx+(s/2)-1)
+                        y = int(yindx+(s/2)-1)
                         h, w = s, s
 
                     # for each added mnist image add list of mnist number, position and height and width to the list

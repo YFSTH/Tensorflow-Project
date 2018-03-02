@@ -1,5 +1,3 @@
-import numpy as np
-from skimage.measure import block_reduce
 import tensorflow as tf
 
 
@@ -77,26 +75,28 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
 def roi_pooling(input, proposals, output_shape):
     """
     Initialize a region of interest (ROI) pooling layer with given proposals and output shape. Rescale all region
-    propsals to uniform height and width for fully-connected layers.
+    propsals to uniform width and height for fully-connected layers.
 
     :param input: feature maps from a convolutional layer
-    :param proposals: 4D tensor for region proposals of [left upper corner x, left upper corner y, height, width]
-    :param output_shape: 2D tensor for rescaled output of [height, width]
+    :param proposals: 4D tensor for region proposals of [left upper corner x, left upper corner y, width, height]
+    :param output_shape: 2D tensor for rescaled output of [width, height]
     :return: uniform region proposals
     """
-    roi = input[:, proposals[0]:proposals[0]+proposals[2], proposals[1]:proposals[1]+proposals[3], :]
-
-    if proposals[2] % output_shape[0] != 0:
-        roi = np.repeat(roi, output_shape[0], axis=1)
-    else:
-        proposals[2] = int(proposals[2] / output_shape[0])
+    roi = input[:, proposals[1]:proposals[1]+proposals[3], proposals[0]:proposals[0]+proposals[2], :]
 
     if proposals[3] % output_shape[1] != 0:
-        roi = np.repeat(roi, output_shape[1], axis=2)
+        tmp = tf.tile(tf.reshape(tf.transpose(roi, [0, 3, 2, 1]), [-1, 1]), [1, output_shape[1]])
+        roi = tf.transpose(tf.reshape(tmp, [roi.shape[0], roi.shape[3], roi.shape[2], proposals[3] * output_shape[1]]), [0, 3, 2, 1])
     else:
         proposals[3] = int(proposals[3] / output_shape[1])
 
-    kernel = (1, proposals[2], proposals[3], 1)
-    roi = block_reduce(roi, kernel, np.max)
+    if proposals[2] % output_shape[0] != 0:
+        tmp = tf.tile(tf.reshape(tf.transpose(roi, [0, 1, 3, 2]), [-1, 1]), [1, output_shape[0]])
+        roi = tf.transpose(tf.reshape(tmp, [roi.shape[0], roi.shape[1], roi.shape[3], proposals[2] * output_shape[0]]), [0, 1, 3, 2])
+    else:
+        proposals[2] = int(proposals[2] / output_shape[0])
+
+    kernel = [1, proposals[3], proposals[2], 1]
+    roi = tf.nn.max_pool(roi, ksize=kernel, strides=kernel, padding='SAME')
 
     return roi
