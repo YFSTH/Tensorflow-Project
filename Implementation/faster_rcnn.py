@@ -21,7 +21,7 @@ from vgg16.vgg16 import VGG16
 # Set class variables
 
 # Image generation
-NUM_COLLAGES = 200
+NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 5
@@ -58,15 +58,17 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 5
+EPOCHS_TRAINSTEP_1 = 5
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.relu
+RP_PATH = 'proposals.pkl'
 STORE_RPN = True
 RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
 
 # Fast R-CNN
 ROI_FM_SIZE = 8
+EPOCHS_TRAINSTEP_2 = 1
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
@@ -170,8 +172,7 @@ with tf.variable_scope('rpn'):
                     # filter plane shape: (1, 16, 16, 9)
                     filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
                     filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
-                    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
-                                               filtered_tensor)
+                    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor), filtered_tensor)
 
                     # calculate the smooth l1 loss
                     absolute_deviations = tf.abs(filtered_tensor)
@@ -283,8 +284,10 @@ with tf.variable_scope('rpn'):
 
 with tf.variable_scope('fast_rcnn'):
 
+    bbox = tf.placeholder(tf.int64, [4])
+
     with tf.variable_scope('roi_pooling'):
-        pool5 = roi_pooling(vgg16.conv5_3, [6, 2, 5, 9], [8, 8])    # TODO: Replace proposals
+        pool5 = roi_pooling(vgg16.conv5_3, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
 
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(pool5, [-1, np.prod(pool5.shape[1:])]), 4096, False, tf.nn.relu)
@@ -336,19 +339,43 @@ if __name__ == "__main__":
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
         iter = 0
+        proposals = []
 
-        for epoch in range(EPOCHS_TRAINSTEP1):
+        for epoch in range(EPOCHS_TRAINSTEP_1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
-                                               feed_dict={X: X_batch,
-                                                          Y: Y_batch,
-                                                          anchor_coordinates: anchors[first],
-                                                          groundtruth_coordinates: train_ground_truth_tensor[first],
-                                                          selection_tensor: train_selection_tensor[first]})
+                    _, rp, lr, lc, ol = sess.run(
+                        [rpn_train_op, predicted_coordinates, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                        feed_dict={X: X_batch,
+                                   Y: Y_batch,
+                                   anchor_coordinates: anchors[first],
+                                   groundtruth_coordinates: train_ground_truth_tensor[first],
+                                   selection_tensor: train_selection_tensor[first]}
+                    )
+
+                    if epoch + 1 == EPOCHS_TRAINSTEP_1:
+                        proposals.append(rp)
+
                     if iter % 10 == 0:
                         print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
+
+        with open(RP_PATH, 'wb') as file:
+            pickle.dump(proposals, file)
+
+        for epoch in range(EPOCHS_TRAINSTEP_2):
+            for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
+                for i, j, k in np.ndindex(16, 16, 9):
+                    if train_selection_tensor[first][:, i, j, k, 0] == 1:
+
+                        proposal = np.zeros(4)
+                        proposal[0] = proposals[first][:, i, j, k]
+                        proposal[1] = proposals[first][:, i, j, 9+k]
+                        proposal[2] = proposals[first][:, i, j, 18+k]
+                        proposal[3] = proposals[first][:, i, j, 27+k]
+
+                        out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
+                        print(out.shape)
 
         if STORE_RPN:
             filename = 'rpn.ckpt'
