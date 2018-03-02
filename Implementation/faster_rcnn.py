@@ -122,7 +122,7 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 with tf.variable_scope('imagenet'):
     X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
     Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
-    vgg16 = VGG16()
+    vgg16 = VGG16(vgg16_npy_path=VGG16_PATH)
     vgg16.build(X)
 
 
