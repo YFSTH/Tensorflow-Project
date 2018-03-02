@@ -169,18 +169,18 @@ with tf.variable_scope('rpn'):
         with tf.variable_scope('regression_parametrization'):
             # perform boxregression parametrization by transforming the coordinates and width and height to yield the
             # predicted and true (=target) coordinate parameters used for the regression loss
-            x_xor_y = lambda t1, t2, t3: tf.divide(tf.subtract(t1, t2), t3)
-            w_xor_h = lambda t1, t2: tf.log(tf.divide(t1, t2))
-            t_x = x_xor_y(predicted_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
-            t_y = x_xor_y(predicted_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
-            t_w = w_xor_h(predicted_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
-            t_h = w_xor_h(predicted_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
-            t_predicted = tf.concat([t_x, t_y, t_w, t_h], axis=0)
-            t_x = x_xor_y(groundtruth_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
-            t_y = x_xor_y(groundtruth_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
-            t_w = w_xor_h(groundtruth_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
-            t_h = w_xor_h(groundtruth_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
-            t_target = tf.concat([t_x, t_y, t_w, t_h], axis=0)
+            tx_xor_ty = lambda t1, t2, t3: tf.divide(tf.subtract(t1, t2), t3)
+            tw_xor_th = lambda t1, t2: tf.log(tf.divide(t1, t2))
+            tx = tx_xor_ty(predicted_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
+            ty = tx_xor_ty(predicted_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
+            tw = tw_xor_th(predicted_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
+            th = tw_xor_th(predicted_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
+            t_predicted = tf.concat([tx, ty, tw, th], axis=0)
+            tx = tx_xor_ty(groundtruth_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 18:27])
+            ty = tx_xor_ty(groundtruth_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 27:36])
+            tw = tw_xor_th(groundtruth_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
+            th = tw_xor_th(groundtruth_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
+            t_target = tf.concat([tx, ty, tw, th], axis=0)
             # t_target and t_predicted should have shape (4, feature map size, feature map size, number of anchors)
 
             with tf.variable_scope('regression_loss'):
@@ -331,7 +331,7 @@ with tf.name_scope('model_savers'):
 
 with tf.name_scope('model_initializers'):
     init = tf.global_variables_initializer()
-    vgg16_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='vgg16'))
+    vgg16_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
     rpn_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
     fast_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
