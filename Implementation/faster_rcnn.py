@@ -326,17 +326,16 @@ if __name__ == "__main__":
 
     with tf.Session() as sess:
 
-        with tf.Session() as sess:
-
-            # Initialize xor restore the required sub-models
-            def restore_xor_init(restore, saver, path, initil):
-                saver.restore(sess, path) if restore else sess.run(initil)
-            restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
-            restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
-            if ~RESTORE_VGG:
-                sess.run(vgg_init)
+        # Initialize xor restore the required sub-models
+        def restore_xor_init(restore, saver, path, initil):
+            saver.restore(sess, path) if restore else sess.run(initil)
+        restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+        restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
+        if ~RESTORE_VGG:
+            sess.run(vgg_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        iter = 0
 
         for epoch in range(EPOCHS_TRAINSTEP1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
