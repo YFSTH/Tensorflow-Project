@@ -4,16 +4,15 @@
 import os
 import pdb
 import pickle
-
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from functools import partial
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
 from data_generation.data_gen import *
 from network.layers import convolutional, fully_connected, roi_pooling
-from optimizers.AMSgrad import AMSGrad
 from vgg16.vgg16 import VGG16
 
 
@@ -55,22 +54,20 @@ NUM_CLASSES = 10
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 10
+EPOCHS_TRAINSTEP1 = 1
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.relu
 CKPT_PATH = './checkpoints/'
+STORE_VGG = True
+RESTORE_VGG = False
+VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 STORE_RPN = True
 RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
-STORE_VGG = True
-RESTORE_VGG = False
-VGG_PATH = './checkpoints/vgg16.ckpt'
 STORE_FAST = True
 RESTORE_FAST = False
-FAST_PATH = './checkpoints/fast_rcnn.ckpt'
+FAST_PATH = './checkpoints/fast.ckpt'
 
-
-# TODO: Employ regularization
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -78,12 +75,9 @@ create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_im
                 background=BACKGROUND, min_scaling=MIN_SCALING, max_scaling=MAX_SCALING, scaling_steps=SCALING_STEPS,
                 counterclock_angle=COUNTERCLOCK_ANGLE, clockwise_angle=CLOCKWISE_ANGLE, rotation_steps=ROTATION_STEPS)
 
+
 # Create input batch generator
 batcher = MNISTCollage('./data_generation')
-train_labels = batcher.train_labels
-valid_labels = batcher.valid_labels
-test_labels  = batcher.test_labels
-
 
 # Create anchor tensor
 anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE, ANCHORS_SCALES, ANCHORS_RATIOS)
@@ -96,27 +90,11 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
-train_ground_truth_tensor, train_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                       imgs=batcher.train_data, labels=train_labels,
-                                                                       load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                       filename='train_anchors',
-                                                                       num_selected=NUM_SELECTED_ANCHORS,
-                                                                       lower_threshold=LOWER_THRESHOLD,
-                                                                       upper_threshold=UPPER_THRESHOLD)
-valid_ground_truth_tensor, valid_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                       imgs=batcher.valid_data, labels=valid_labels,
-                                                                       load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                       filename='valid_anchors',
-                                                                       num_selected=NUM_SELECTED_ANCHORS,
-                                                                       lower_threshold=LOWER_THRESHOLD,
-                                                                     upper_threshold=UPPER_THRESHOLD)
-test_ground_truth_tensor, test_selection_tensor = anchors_evaluation(batch_anchor_tensor=anchors,
-                                                                     imgs=batcher.test_data, labels=test_labels,
-                                                                     load_last_anchors=LOAD_LAST_ANCHORS,
-                                                                     filename='test_anchors',
-                                                                     num_selected=NUM_SELECTED_ANCHORS,
-                                                                     lower_threshold=LOWER_THRESHOLD,
-                                                                     upper_threshold=UPPER_THRESHOLD)
+eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS, num_selected=NUM_SELECTED_ANCHORS,
+               lower_threshold=LOWER_THRESHOLD, upper_threshold=UPPER_THRESHOLD)
+train_ground_truth_tensor, train_selection_tensor = eval(imgs=batcher.train_data, labels=batcher.train_labels, filename='train_anchors')
+valid_ground_truth_tensor, valid_selection_tensor = eval(imgs=batcher.valid_data, labels=batcher.valid_labels, filename='valid_anchors')
+test_ground_truth_tensor, test_selection_tensor = eval(imgs=batcher.test_data, labels=batcher.test_labels, filename='test_anchors')
 # These methods should return two tensors:
 # First tensor: Ground truth box tensor of shape (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT)
 # Second tensor: Selection tensor (NUM_IMGS, NUM_ANCHORS*4, FM_WIDTH, FM_HEIGHT, [ANCHOR_TYPE, MNIST_CLASS, IoU]),
@@ -331,7 +309,7 @@ with tf.name_scope('model_savers'):
 
 with tf.name_scope('model_initializers'):
     init = tf.global_variables_initializer()
-    vgg16_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
+    vgg_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
     rpn_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
     fast_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
@@ -343,20 +321,15 @@ if __name__ == "__main__":
 
     with tf.Session() as sess:
 
-        # Initialize xor restore the required sub-models
         with tf.Session() as sess:
-            if RESTORE_VGG:
-                vgg_saver.restore(sess, VGG_PATH)
-            else:
-                sess.run(vgg16_init)
-            if RESTORE_RPN:
-                rpn_saver.restore(sess, RPN_PATH)
-            else:
-                sess.run(rpn_init)
-            if RESTORE_FAST:
-                fast_saver.restore(sess, FAST_PATH)
-            else:
-                sess.run(fast_init)
+
+            # Initialize xor restore the required sub-models
+            def restore_xor_init(restore, saver, path, initil):
+                saver.restore(sess, path) if restore else sess.run(initil)
+            restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+            restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
+            if ~RESTORE_VGG:
+                sess.run(vgg_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
@@ -374,14 +347,12 @@ if __name__ == "__main__":
                         print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
 
-
         if STORE_RPN:
             filename = 'rpn.ckpt'
             rpn_saver.save(sess, CKPT_PATH + filename)
         if STORE_VGG:
-            filename = 'vgg.ckpt'
-            rpn_saver.save(sess, CKPT_PATH + filename)
+            filename = 'vgg16.npy'
+            vgg16.save_npy(sess, CKPT_PATH + filename)
         if STORE_FAST:
             filename = 'fast.ckpt'
             rpn_saver.save(sess, CKPT_PATH + filename)
-

@@ -132,6 +132,21 @@ class VGG16:
     def get_fc_weight(self, name):
         return tf.constant(self.data_dict[name][0], name="weights")
 
+    def save_npy(self, sess, npy_path="./vgg19-save.npy"):
+        assert isinstance(sess, tf.Session)
+
+        data_dict = {}
+
+        for (name, idx), var in list(self.var_dict.items()):
+            var_out = sess.run(var)
+            if name not in data_dict:
+                data_dict[name] = {}
+            data_dict[name][idx] = var_out
+
+        np.save(npy_path, data_dict)
+        print(("file saved", npy_path))
+        return npy_path
+
     def get_var(self, initial_value, name, idx, var_name):
         if self.data_dict is not None and name in self.data_dict:
             value = self.data_dict[name][idx]
