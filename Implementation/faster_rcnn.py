@@ -4,22 +4,24 @@
 import os
 import pdb
 import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from functools import partial
+
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
 from data_generation.data_gen import *
+from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
 from vgg16.vgg16 import VGG16
 
 
 # Set class variables
 
-# Image generation class variables
-NUM_COLLAGES = 1000
+# Image generation
+NUM_COLLAGES = 200
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 5
@@ -33,10 +35,10 @@ COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 1
 
-# Batch generator class variable
+# Batch generation
 BATCH_SIZE = 1
 
-# Anchor creation and selection class variables
+# Anchor creation and selection
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
@@ -48,22 +50,23 @@ LOWER_THRESHOLD = 0.30
 UPPER_THRESHOLD = 0.70
 NUM_SELECTED_ANCHORS = 256
 
-# Fast R-CNN class variables
-ROI_FM_SIZE = 8
-NUM_CLASSES = 10
-
-# RPN
-REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 1
-LR_RPN = 0.001
-RPN_ACTFUN = tf.nn.relu
+# VGG16
 CKPT_PATH = './checkpoints/'
 STORE_VGG = True
 RESTORE_VGG = False
 VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
+
+# RPN
+REG_TO_CLS_LOSS_RATIO = 10
+EPOCHS_TRAINSTEP1 = 5
+LR_RPN = 0.001
+RPN_ACTFUN = tf.nn.relu
 STORE_RPN = True
 RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
+
+# Fast R-CNN
+ROI_FM_SIZE = 8
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
@@ -74,7 +77,6 @@ create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_im
                 max_num_imgs=MAX_NUM_IMGS, replacement=REPLACEMENT, allow_overhang=ALLOW_OVERHANG,
                 background=BACKGROUND, min_scaling=MIN_SCALING, max_scaling=MAX_SCALING, scaling_steps=SCALING_STEPS,
                 counterclock_angle=COUNTERCLOCK_ANGLE, clockwise_angle=CLOCKWISE_ANGLE, rotation_steps=ROTATION_STEPS)
-
 
 # Create input batch generator
 batcher = MNISTCollage('./data_generation')
@@ -88,7 +90,6 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
 
-
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
 eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS, num_selected=NUM_SELECTED_ANCHORS,
                lower_threshold=LOWER_THRESHOLD, upper_threshold=UPPER_THRESHOLD)
@@ -101,7 +102,6 @@ test_ground_truth_tensor, test_selection_tensor = eval(imgs=batcher.test_data, l
 #                where ANCHOR_TYPE is either positive (=1), negative (=0), neutral (=-1) or deactivated
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
-
 
 # swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN
 # and add length 1 zero dimension
@@ -281,21 +281,27 @@ with tf.variable_scope('rpn'):
 
 ### Fast R-CNN
 
-with tf.name_scope('fast_rcnn'):
+with tf.variable_scope('fast_rcnn'):
+
     with tf.variable_scope('roi_pooling'):
         pool5 = roi_pooling(vgg16.conv5_3, [6, 2, 5, 9], [8, 8])    # TODO: Replace proposals
+
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(pool5, [-1, np.prod(pool5.shape[1:])]), 4096, False, tf.nn.relu)
+
     with tf.variable_scope('layer_7'):
         fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
-    with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+
     with tf.variable_scope('bbox_pred'):
         bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
+        # TODO: Implement loss for regression
+
+    with tf.variable_scope('cls_score'):
+        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+
     with tf.variable_scope('cls_prob'):
         cls_prob = fully_connected(cls_score, 10, False, None)
         cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(Y[:, 0, 0], tf.int64), logits=cls_prob))
-    # TODO: Implement loss for regression
 
 
 ### Model saving nodes
@@ -316,7 +322,6 @@ with tf.name_scope('model_initializers'):
 
 ### Execution Phase ###################################################################################################
 
-
 if __name__ == "__main__":
 
     with tf.Session() as sess:
@@ -332,7 +337,6 @@ if __name__ == "__main__":
                 sess.run(vgg_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
-
 
         for epoch in range(EPOCHS_TRAINSTEP1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
