@@ -1,3 +1,5 @@
+import numpy as np
+from skimage.measure import block_reduce
 import tensorflow as tf
 
 
@@ -73,6 +75,35 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
 
 
 def roi_pooling(input, proposals, output_shape):
+    """
+    Initialize a region of interest (ROI) pooling layer with given proposals and output shape. Rescale all region
+    propsals to uniform width and height for fully-connected layers.
+
+    :param input: feature maps from a convolutional layer
+    :param proposals: 4D tensor for region proposals of [left upper corner x, left upper corner y, width, height]
+    :param output_shape: 2D tensor for rescaled output of [width, height]
+    :return: uniform region proposals
+    """
+    roi = input[:, proposals[1]:proposals[1]+proposals[3], proposals[0]:proposals[0]+proposals[2], :]
+
+    if proposals[3] % output_shape[1] != 0:
+        roi = np.repeat(roi, output_shape[1], axis=1)
+    else:
+        proposals[3] = int(proposals[3] / output_shape[1])
+
+    if proposals[2] % output_shape[0] != 0:
+        roi = np.repeat(roi, output_shape[0], axis=2)
+    else:
+        proposals[2] = int(proposals[2] / output_shape[0])
+
+    kernel = (1, proposals[3], proposals[2], 1)
+    roi = block_reduce(roi, kernel, np.max)
+
+    return roi
+
+
+# NOTE: TensorFlow version of the ROI pooling (does not work because of problems with dynamic reshaping)
+def tf_roi_pooling(input, proposals, output_shape):
     """
     Initialize a region of interest (ROI) pooling layer with given proposals and output shape. Rescale all region
     propsals to uniform width and height for fully-connected layers.
