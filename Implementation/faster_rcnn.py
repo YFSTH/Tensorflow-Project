@@ -67,6 +67,7 @@ RPN_PATH = './checkpoints/rpn.ckpt'
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
+FINALLY_VALIDATE = True
 
 
 # Generate images xor load them if they already exist with the desired properties
@@ -335,9 +336,12 @@ if __name__ == "__main__":
 
 
         for epoch in range(EPOCHS_TRAINSTEP1):
+
+            # TODO: Remove debugging stuff
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                    _, lr, lc, ol, tpreds, tclss = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+                                              predicted_coordinates, clshead_conv1],
                                                feed_dict={X: X_batch,
                                                           Y: Y_batch,
                                                           anchor_coordinates: anchors[first],
@@ -346,6 +350,21 @@ if __name__ == "__main__":
                     if iter % 10 == 0:
                         print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
+
+            for f in range(len(batcher.valid_data)):
+                X_batch = batcher.valid_data[f]
+                Y_batch = batcher.valid_labels[f]
+                vlr, vlc, vol, vpreds, vclss = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+                                                            predicted_coordinates, clshead_conv1],
+                                                        feed_dict={X: np.array(X_batch).reshape((1,256,256,3)),
+                                                                   Y: np.array(Y_batch).reshape((1,256,256,3)),
+                                                                   anchor_coordinates: anchors[f],
+                                                                   groundtruth_coordinates: valid_ground_truth_tensor[f],
+                                                                   selection_tensor: valid_selection_tensor[f]})
+
+
+
+
 
         if STORE_RPN:
             filename = 'rpn.ckpt'
