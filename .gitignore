@@ -2,6 +2,7 @@ __pycache__
 .directory
 .DS-Store
 .idea
+*.npy
 *.pkl
+/Implementation/checkpoints
 /Implementation/summaries
-/Implementation/vgg16/vgg16.npy

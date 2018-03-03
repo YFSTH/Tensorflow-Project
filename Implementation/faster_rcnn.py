@@ -4,22 +4,24 @@
 import os
 import pdb
 import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from functools import partial
+
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from batch_generator import MNISTCollage
 from data_generation.data_gen import *
+from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
 from vgg16.vgg16 import VGG16
 
 
 # Set class variables
 
-# Image generation class variables
-NUM_COLLAGES = 1000
+# Image generation
+NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 5
@@ -33,10 +35,10 @@ COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
 ROTATION_STEPS = 1
 
-# Batch generator class variable
+# Batch generation
 BATCH_SIZE = 1
 
-# Anchor creation and selection class variables
+# Anchor creation and selection
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
@@ -48,22 +50,25 @@ LOWER_THRESHOLD = 0.30
 UPPER_THRESHOLD = 0.70
 NUM_SELECTED_ANCHORS = 256
 
-# Fast R-CNN class variables
-ROI_FM_SIZE = 8
-NUM_CLASSES = 10
-
-# RPN
-REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP1 = 1
-LR_RPN = 0.001
-RPN_ACTFUN = tf.nn.relu
+# VGG16
 CKPT_PATH = './checkpoints/'
 STORE_VGG = True
 RESTORE_VGG = False
 VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
+
+# RPN
+REG_TO_CLS_LOSS_RATIO = 10
+EPOCHS_TRAINSTEP_1 = 5
+LR_RPN = 0.001
+RPN_ACTFUN = tf.nn.relu
+RP_PATH = 'proposals.pkl'
 STORE_RPN = True
 RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
+
+# Fast R-CNN
+ROI_FM_SIZE = 8
+EPOCHS_TRAINSTEP_2 = 1
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
@@ -76,7 +81,6 @@ create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_im
                 background=BACKGROUND, min_scaling=MIN_SCALING, max_scaling=MAX_SCALING, scaling_steps=SCALING_STEPS,
                 counterclock_angle=COUNTERCLOCK_ANGLE, clockwise_angle=CLOCKWISE_ANGLE, rotation_steps=ROTATION_STEPS)
 
-
 # Create input batch generator
 batcher = MNISTCollage('./data_generation')
 
@@ -88,7 +92,6 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # y-"                                            " second 9 "                    "
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
-
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
 eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS, num_selected=NUM_SELECTED_ANCHORS,
@@ -103,7 +106,6 @@ test_ground_truth_tensor, test_selection_tensor = eval(imgs=batcher.test_data, l
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
 
-
 # swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN
 # and add length 1 zero dimension
 swapaxes = lambda x: np.swapaxes(np.swapaxes(x, 1, 2), 2, 3)
@@ -114,6 +116,7 @@ valid_ground_truth_tensor = swapaxes(valid_ground_truth_tensor).reshape((NUM_COL
 valid_selection_tensor = swapaxes(valid_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
 test_ground_truth_tensor = swapaxes(test_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
+
 
 
 ### Data Flow Graph Construction Phase ################################################################################
@@ -171,8 +174,7 @@ with tf.variable_scope('rpn'):
                     # filter plane shape: (1, 16, 16, 9)
                     filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
                     filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
-                    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
-                                               filtered_tensor)
+                    filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor), filtered_tensor)
 
                     # calculate the smooth l1 loss
                     absolute_deviations = tf.abs(filtered_tensor)
@@ -282,21 +284,29 @@ with tf.variable_scope('rpn'):
 
 ### Fast R-CNN
 
-with tf.name_scope('fast_rcnn'):
+with tf.variable_scope('fast_rcnn'):
+
+    bbox = tf.placeholder(tf.int64, [4])
+
     with tf.variable_scope('roi_pooling'):
-        pool5 = roi_pooling(vgg16.conv5_3, [6, 2, 5, 9], [8, 8])    # TODO: Replace proposals
+        pool5 = roi_pooling(vgg16.conv5_3, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
+
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(pool5, [-1, np.prod(pool5.shape[1:])]), 4096, False, tf.nn.relu)
+
     with tf.variable_scope('layer_7'):
         fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
-    with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+
     with tf.variable_scope('bbox_pred'):
         bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
+        # TODO: Implement loss for regression
+
+    with tf.variable_scope('cls_score'):
+        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+
     with tf.variable_scope('cls_prob'):
         cls_prob = fully_connected(cls_score, 10, False, None)
         cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(Y[:, 0, 0], tf.int64), logits=cls_prob))
-    # TODO: Implement loss for regression
 
 
 ### Model saving nodes
@@ -317,38 +327,38 @@ with tf.name_scope('model_initializers'):
 
 ### Execution Phase ###################################################################################################
 
-
 if __name__ == "__main__":
-
+#
     with tf.Session() as sess:
 
-        with tf.Session() as sess:
-
-            # Initialize xor restore the required sub-models
-            def restore_xor_init(restore, saver, path, initil):
-                saver.restore(sess, path) if restore else sess.run(initil)
-            restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
-            restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
-            if ~RESTORE_VGG:
-                sess.run(vgg_init)
+        # Initialize xor restore the required sub-models
+        restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
+        restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+        restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
+        if ~RESTORE_VGG:
+            sess.run(vgg_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        iter = 0
+        proposals = []
 
-
-        for epoch in range(EPOCHS_TRAINSTEP1):
-
-            # TODO: Remove debugging stuff
+        for epoch in range(EPOCHS_TRAINSTEP_1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
                 if BATCH_SIZE == 1:
-                    _, lr, lc, ol, tpreds, tclss = sess.run([rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-                                              predicted_coordinates, clshead_conv1],
-                                               feed_dict={X: X_batch,
-                                                          Y: Y_batch,
-                                                          anchor_coordinates: anchors[first],
-                                                          groundtruth_coordinates: train_ground_truth_tensor[first],
-                                                          selection_tensor: train_selection_tensor[first]})
+                    _, rp, lr, lc, ol = sess.run(
+                        [rpn_train_op, predicted_coordinates, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                        feed_dict={X: X_batch,
+                                   Y: Y_batch,
+                                   anchor_coordinates: anchors[first],
+                                   groundtruth_coordinates: train_ground_truth_tensor[first],
+                                   selection_tensor: train_selection_tensor[first]}
+                    )
+
+                    if epoch + 1 == EPOCHS_TRAINSTEP_1:
+                        proposals.append(rp)
+
                     if iter % 10 == 0:
-                        print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                        print('iteration:', iter)#, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
 
             for f in range(len(batcher.valid_data)):
@@ -362,16 +372,25 @@ if __name__ == "__main__":
                                                                    groundtruth_coordinates: valid_ground_truth_tensor[f],
                                                                    selection_tensor: valid_selection_tensor[f]})
 
+                with open(RP_PATH, 'wb') as file:
+                    pickle.dump(proposals, file)
 
 
+                for epoch in range(EPOCHS_TRAINSTEP_2):
+                    for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
+                        for i, j, k in np.ndindex(16, 16, 9):
+                            if train_selection_tensor[first][:, i, j, k, 0] == 1:
+                                proposal = np.zeros(4)
+                                proposal[0] = proposals[first][:, i, j, k]
+                                proposal[1] = proposals[first][:, i, j, 9 + k]
+                                proposal[2] = proposals[first][:, i, j, 18 + k]
+                                proposal[3] = proposals[first][:, i, j, 27 + k]
 
+                                out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
+                                print(out.shape)
 
-        if STORE_RPN:
-            filename = 'rpn.ckpt'
-            rpn_saver.save(sess, CKPT_PATH + filename)
-        if STORE_VGG:
-            filename = 'vgg16.npy'
-            vgg16.save_npy(sess, CKPT_PATH + filename)
-        if STORE_FAST:
-            filename = 'fast.ckpt'
-            rpn_saver.save(sess, CKPT_PATH + filename)
+                storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+                storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+                storer(STORE_FAST, fast_saver, 'fast.ckpt')
+                if STORE_VGG:
+                    vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
