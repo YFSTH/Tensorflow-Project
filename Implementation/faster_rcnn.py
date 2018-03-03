@@ -361,16 +361,6 @@ if __name__ == "__main__":
                         print('iteration:', iter)#, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
 
-            for f in range(len(batcher.valid_data)):
-                X_batch = batcher.valid_data[f]
-                Y_batch = batcher.valid_labels[f]
-                vlr, vlc, vol, vpreds, vclss = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-                                                            predicted_coordinates, clshead_conv1],
-                                                        feed_dict={X: np.array(X_batch).reshape((1,256,256,3)),
-                                                                   Y: np.array(Y_batch).reshape((1,256,256,3)),
-                                                                   anchor_coordinates: anchors[f],
-                                                                   groundtruth_coordinates: valid_ground_truth_tensor[f],
-                                                                   selection_tensor: valid_selection_tensor[f]})
 
                 with open(RP_PATH, 'wb') as file:
                     pickle.dump(proposals, file)
@@ -394,3 +384,17 @@ if __name__ == "__main__":
                 storer(STORE_FAST, fast_saver, 'fast.ckpt')
                 if STORE_VGG:
                     vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
+
+
+
+                # # Validation
+                # for f in range(len(batcher.valid_data)):
+                #     X_batch = batcher.valid_data[f]
+                #     Y_batch = batcher.valid_labels[f]
+                #     vlr, vlc, vol = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+                #                               predicted_coordinates, clshead_conv1],
+                #                              feed_dict={X: np.array(X_batch).reshape((1, 256, 256, 3)),
+                #                                         Y: np.array(Y_batch).reshape((1, 256, 256, 3)),
+                #                                         anchor_coordinates: anchors[f],
+                #                                         groundtruth_coordinates: valid_ground_truth_tensor[f],
+                #                                         selection_tensor: valid_selection_tensor[f]})
