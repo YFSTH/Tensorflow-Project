@@ -117,6 +117,7 @@ test_ground_truth_tensor = swapaxes(test_ground_truth_tensor).reshape((NUM_COLLA
 test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))
 
 
+
 ### Data Flow Graph Construction Phase ################################################################################
 
 ### ImageNet
@@ -326,12 +327,11 @@ with tf.name_scope('model_initializers'):
 ### Execution Phase ###################################################################################################
 
 if __name__ == "__main__":
-
+#
     with tf.Session() as sess:
 
         # Initialize xor restore the required sub-models
-        def restore_xor_init(restore, saver, path, initil):
-            saver.restore(sess, path) if restore else sess.run(initil)
+        restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
         restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
         if ~RESTORE_VGG:
@@ -357,7 +357,7 @@ if __name__ == "__main__":
                         proposals.append(rp)
 
                     if iter % 10 == 0:
-                        print('iteration:', iter, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                        print('iteration:', iter)#, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     iter += 1
 
         with open(RP_PATH, 'wb') as file:
@@ -377,12 +377,8 @@ if __name__ == "__main__":
                         out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
                         print(out.shape)
 
-        if STORE_RPN:
-            filename = 'rpn.ckpt'
-            rpn_saver.save(sess, CKPT_PATH + filename)
+        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        storer(STORE_FAST, fast_saver, 'fast.ckpt')
         if STORE_VGG:
-            filename = 'vgg16.npy'
-            vgg16.save_npy(sess, CKPT_PATH + filename)
-        if STORE_FAST:
-            filename = 'fast.ckpt'
-            rpn_saver.save(sess, CKPT_PATH + filename)
+            vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')

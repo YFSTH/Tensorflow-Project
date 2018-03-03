@@ -84,6 +84,7 @@ class VGG16:
         #self.saver = tf.train.Saver()
 
 
+
     def avg_pool(self, bottom, name):
         return tf.nn.avg_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
 
@@ -92,7 +93,7 @@ class VGG16:
 
     def conv_layer(self, bottom, in_channels, out_channels, name):
         with tf.variable_scope(name):
-            filt, conv_biases = self.get_conv_var(3, in_channels, out_channels, name)
+            filt, conv_biases = self.get_conv_var(3, in_channels, out_channels, name ='')
 
             conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
             bias = tf.nn.bias_add(conv, conv_biases)
@@ -100,7 +101,7 @@ class VGG16:
 
             return relu
 
-    def fc_layer(self, bottom, name):
+    def fc_layer(self, bottom, name = ''):
         with tf.variable_scope(name):
             shape = bottom.get_shape().as_list()
             dim = 1
@@ -117,7 +118,7 @@ class VGG16:
 
             return fc
 
-    def get_conv_var(self, filter_size, in_channels, out_channels, name):
+    def get_conv_var(self, filter_size, in_channels, out_channels, name =''):
         initial_value = tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], 0.0, 0.001)
         filters = self.get_var(initial_value, name, 0, name + "_filters")
 
