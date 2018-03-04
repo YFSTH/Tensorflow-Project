@@ -4,6 +4,7 @@ def debugging_module(batch_anchor_tensor, collage, label, gtt, slt, anchor_objec
 
     # Note: A single collage image is observed
     import matplotlib.pyplot as plt
+
     for l in label:
         collage[l[1] - 2:l[1] + 2, l[2] - 2:l[2] + 2, 0] = 125
         collage[l[1] - 2:l[1] + 2, l[2] - 2:l[2] + 2, 1] = 0
