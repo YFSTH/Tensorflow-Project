@@ -9,7 +9,7 @@ VGG_MEAN = [103.939, 116.779, 123.68]
 
 
 class VGG16:
-    def __init__(self, vgg16_npy_path=None, trainable=True):
+    def __init__(self, vgg16_npy_path=None, trainable=False):
         if vgg16_npy_path is None:
             path = inspect.getfile(VGG16)
             path = os.path.abspath(os.path.join(path, os.pardir))

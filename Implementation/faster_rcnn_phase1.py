@@ -15,7 +15,7 @@ from batch_generator import MNISTCollage
 from data_generation.data_gen import *
 from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
-from vgg16.vgg16 import VGG16
+from vgg16.vgg16_nontrainsavable import VGG16
 
 
 # Set class variables
