@@ -17,7 +17,7 @@ def convolutional(input, kernel_shape, stride_size, normalization=False, activat
     """
     fan_in = int(input.shape[1] * input.shape[2])
 
-    if "elu" in str(activation):
+    if "relu" in str(activation):
         weight_initializer = tf.random_normal_initializer(stddev=2.0/fan_in)
         bias_initializer = tf.constant_initializer(0.1)
     else:
@@ -52,7 +52,7 @@ def fully_connected(input, n_neurons, normalization=False, activation=None):
     """
     fan_in = int(input.shape[-1])
 
-    if "elu" in str(activation):
+    if "relu" in str(activation):
         weight_initializer = tf.random_normal_initializer(stddev=2.0 / fan_in)
         bias_initializer = tf.constant_initializer(0.1)
     else:

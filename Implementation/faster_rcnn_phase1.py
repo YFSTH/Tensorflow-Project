@@ -58,7 +58,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 12
+EPOCHS_TRAINSTEP_1 = 20
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -280,8 +280,8 @@ with tf.variable_scope('rpn'):
 
             # rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
             # rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
-            # rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
-            rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
+            rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
+            #rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
             # AMSGrad = AMSGrad(learning_rate)
             # rpn_train_op = AMSGrad.minimize(overall_loss, global_step=global_step)
 
@@ -355,6 +355,25 @@ if __name__ == "__main__":
         proposals = []
         train_step = 0
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         xt = None
         yt = None
         tpreds = None
@@ -371,7 +390,6 @@ if __name__ == "__main__":
 
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
-
 
                     #pdb.set_trace()
 
@@ -400,6 +418,61 @@ if __name__ == "__main__":
                     if train_step % 9 == 0:
                         print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     train_step += 1
+
+
+
+
+
+        # Validation
+        vxt = None
+        vyt = None
+        vpreds = None
+        vslt = None
+        vgtt = None
+        vreg_loss_list = []
+        vcls_loss_list = []
+        voal_loss_list = []
+
+
+
+        for f in range(len(batcher.valid_data)):
+            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+
+            X_batch = batcher.valid_data[f]
+            Y_batch = batcher.valid_labels[f]
+
+            vgg16_conv5_3_relu = sess.run(result_tensor,
+                                          feed_dict={inputs: X_batch.reshape((1, 256, 256, 3))})
+
+            vlr, vlc, vol, pres, clss = sess.run(
+                [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+                 predicted_coordinates, clshead_conv1],
+                feed_dict={X: vgg16_conv5_3_relu,
+                           Y: np.array(Y_batch).reshape((1, 5, 7)),
+                           anchor_coordinates: anchors[f],
+                           groundtruth_coordinates: valid_ground_truth_tensor[f],
+                           selection_tensor: valid_selection_tensor[f]})
+
+            vxt = X_batch
+            vyt = Y_batch
+            vpreds = pres
+            vslt = valid_ground_truth_tensor[f]
+            vgtt = valid_ground_truth_tensor[f]
+            vreg_loss_list.append(vlr)
+            vcls_loss_list.append(vlc)
+            voal_loss_list.append(vol)
+
+        with open('vdump.pkl', 'wb') as file:
+            pickle.dump([vxt, vyt, vpreds, vslt, vgtt, vreg_loss_list, vcls_loss_list, voal_loss_list],
+                        file)
+
+
+
+
+
+
+
+
 
         with open(RP_PATH, 'wb') as file:
             pickle.dump(proposals, file)
@@ -433,27 +506,3 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-        # # Validation
-        # for f in range(len(batcher.valid_data)):
-        #     X_batch = batcher.valid_data[f]
-        #     Y_batch = batcher.valid_labels[f]
-        #     vlr, vlc, vol = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-        #                               predicted_coordinates, clshead_conv1],
-        #                              feed_dict={X: np.array(X_batch).reshape((1, 256, 256, 3)),
-        #                                         Y: np.array(Y_batch).reshape((1, 256, 256, 3)),
-        #                                         anchor_coordinates: anchors[f],
-        #                                         groundtruth_coordinates: valid_ground_truth_tensor[f],
-        #                                         selection_tensor: valid_selection_tensor[f]})
