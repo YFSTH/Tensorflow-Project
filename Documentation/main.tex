@@ -16,22 +16,21 @@
 \maketitle
 
 \begin{abstract}
-Enter a short summary here. What topic do you want to investigate and why? What experiment did you perform? What were your main results and conclusion?
-
 Object detection is a computer technology prominent in the fields of computer vision and image processing. It thus does not come as a surprise that research in object detection is critical in the development of technologies that involves face detection and pedestrian detection, among other domains. The \emph{Regional Convolutional Neural Network} (R-CNN) \cite{rcnn} is an early attempt to achieve object detection through the use of neural networks, it has since then been supplanted by the \emph{Spatial Pyramid Pooling network} (SPPnet) \cite{sppnet} or improved into the \emph{Fast R-CNN} \cite{fastrcnn}, both in terms of speed and accuracy. In this work, we introduce a "toy"-size implementation of more recent \emph{Faster R-CNN} of Ren et al. (2016) \cite{fasterrcnn}, which combines the so called \emph{Region Proposal Network} (RPN) \cite{fasterrcnn} with the Fast R-CNN for even better running time and accuracy score.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:introduction}
 
-Explain the context of the experiment here. Why is condensed matter physics interesting or important?
-Optional things you could talk about (but don't have to -- this is up to you): transistors, computers, Quantum computers, fundamental knowledge (e.g. the resistance quantum).
+Object detection being used in a wide range of domains, from face recognition to tracking a ball in a football match, developing fast and accurate methods to achieve it is therefore critical to the progress in the aforementioned domains. On the \emph{PASCAL VOC 2012} benchmark \cite{voc} with the very deep convolutional neural network \emph{VGG16} \cite{vgg}, the Faster R-CNN of Ren et al. (2016) achieved 198 ms/img and 70.4\% \emph{mean Average Precision} (mAP) \cite{fasterrcnn}. It represents a net improvement over the earlier methods, with the R-CNN of Girshick et al. (2014) scoring 62.4\% mAP \cite{fastrcnn}, and the Fast R-CNN of Girshick (2015) reaching 1830 ms/img and 68.4\% mAP \cite{fasterrcnn}.
 
-Briefly explain what methods you will use in the experiment, and what values you will extract from the data.
+The problem of object detection can be split into two smaller ones. The localization problem consists of localizing objects in the image, whereas assigning labels to the found objects amounts to solve the classification problem. Localization is especially important when the input image possibly contain more than one object. Without first localizing potential candidates, a traditional CNN would get confused with the multiple labels during the training, and as a result it may assign the wrong label to an object that just happened to frequently co-occur in the training data with the object to which that label actually corresponds. For example,  if a CNN is trained to recognize the object banana in an image, but that in the training data bananas often co-occur with grocery bags, the CNN once trained may start to classify images featuring grocery bags as featuring bananas even though they may actually contain no banana at all.
 
-For this section and all following sections: If you refer to an equation, previous result or theory that is not regarded as common knowledge, then cite the source (article or book) where you found this. For example, you can cite the Nano 3 Lecture notes \cite{nano3}.
+Furthermore, localization is achieved by selecting the \emph{Region of Interests} (RoIs) on the input image that have a high "objectness" score. Earlier version of the R-CNN use either \emph{Selective Search} (SS), which greedily merges superpixels based on engineered low-level features \cite{ss}, or \emph{Edge Boxes} (EB), which use the number of contour wholly contained in a bounding box as object indicator \cite{eb}, to generate the RoIs. In a CPU implementation, SS takes 2 s/img, whereas EB takes 10$\times$ times less this value. The \emph{Region Proposal Network} (RPN) of the Faster R-CNN on the other hand achieves localization at nearly no cost (10 ms/img) by taking advantage of the GPU and sharing convolutions at test-time \cite{fasterrcnn}. The difference between the R-CNN and the Fast R-CNN in terms of object localization is that the former runs a CNN on top of each RoI, whereas the latter perform the feature extraction before generating the RoIs, thus running only one CNN over the entire image instead of many ($\sim$2000) \cite{fastrcnn}. By doing so, the Fast R-CNN actually share computation and greatly reduce the running time of the algorithm. For further processing of the RoIs in the Fast R-CNN, these are all resized and reshaped to the same size and form in the next (pooling) layer \cite{fastrcnn}.
 
-Object detection being used in a wide range of domains, from face recognition to tracking a ball in a football match, developing computationally fast and cheap methods is critical to the improvement of the said domains. The Faster R-CNN of Ren et al. achieves 73.2\% \emph{mean Average Precision} (mAP) on PASCAL VOC 2007 and 70.4\% mAP on PASCAL VOC 2012 \cite{fasterrcnn}. It is a net improvement over the earlier methods, with the R-CNN fc$_7$ of Girshick et al. (2014) going up to 48\% mAP on PASCAL VOC 2007 and 43.5\% on 2010 \cite{rcnn}, the (HZRS's) SPPnet of He et al. achieving 35.11\% mAP on ILSVRC 2014, and the Fast R-CNN of Girshick with VGG16 reaching 66.9\% mAP on PASCAL VOC 2007.
+As for classification, the output of the multiple CNNs (for the R-CNN) or that of the resized and reshaped RoIs (for the Fast R-CNN) are fed into fully connected layers where they are classified by a SVM (for the R-CNN) or a softmax function (for the Fast R-CNN). From that point on, depending on the classifier's output, linear regression is applied to the RoIs' bounding boxes with high objectness score to refine their position \cite{fastrcnn}.
+
+All in all, the main difference between the Fast R-CNN and the Faster R-CNN is the latter's use of a RPN for localization instead of a SS or a EB. In the following section we will thus introduce and explain our own implementation of both the RPN and the Fast R-CNN, followed by the training of this Faster R-CNN on a toy-size problem. A third section will be on the different experiments we conducted with this Faster R-CNN. And last and not least, the fourth section of this paper will be to discuss the experiments' results, the performance of the Faster R-CNN and how it could possibly be improved.
 
 \section{Theory 2-3 pages}
 \label{sec:theory}
@@ -152,10 +151,14 @@ K. He, X. Zhang, S. Ren, and J. Sun. Spatial pyramid pooling in deep convolution
 R. Girshick. Fast R-CNN. \emph{arXiv:1504.08083}, 2015.
 \bibitem{fasterrcnn}
 S. Ren, K. He, R. Girshick, and J. Sun. Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks. In \emph{arXiv:1506.01497v3}, 2016.
-\bibitem{nano3}
-  K. Grove-Rasmussen og Jesper Nygård,
-  \emph{Kvantefænomener i Nanosystemer}.
-  Niels Bohr Institute \& Nano-Science Center, Københavns Universitet
+\bibitem{voc}
+M. Everingham, L. Van Gool, C. K. I. Williams, J. Winn, and A. Zisserman. The PASCAL Visual Object Classes Challenge 2007 (VOC2007) Results, 2007.
+\bibitem{vgg}
+K. Simonyan and A. Zisserman. Very deep convolutional networks for large-scale image recognition. In \emph{ICLR}, 2015.
+\bibitem{ss}
+J. R. Uijlings, K. E. van de Sande, T. Gevers, and A.W. Smeulders. Selective search for object recognition. emph{IJCV}, 2013.
+\bibitem{eb}
+C. L. Zitnick and P. Doll\'ar. Edge boxes: Locating object proposals from edges. In \emph{ECCV}, 2014.
 
 \end{thebibliography}
 \end{document}
