@@ -287,6 +287,8 @@ with tf.variable_scope('rpn'):
 with tf.variable_scope('fast_rcnn'):
 
     inputs = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
+    classes = tf.placeholder(tf.int32, [BATCH_SIZE])
+    boxes = tf.placeholder(tf.int32, [BATCH_SIZE, 4])
 
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(inputs, [-1, np.prod(inputs.shape[1:])]), 4096, False, tf.nn.relu)
@@ -303,7 +305,7 @@ with tf.variable_scope('fast_rcnn'):
 
     with tf.variable_scope('cls_prob'):
         cls_prob = fully_connected(cls_score, 10, False, None)
-        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(Y[:, 0, 0], tf.int64), logits=cls_prob))
+        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_prob))
 
 
 ### Model saving nodes
@@ -366,20 +368,24 @@ if __name__ == "__main__":
             pickle.dump(feature_maps, file)
 
         for epoch in range(EPOCHS_TRAINSTEP_2):
-            for n, image in enumerate(feature_maps):
-                for i, j, k in np.ndindex(16, 16, 9):
-                    if train_selection_tensor[n][:, i, j, k, 0] == 1:
-                        bbox = np.zeros(4)
-                        bbox[0] = proposals[n][:, i, j, k]
-                        bbox[1] = proposals[n][:, i, j, 9 + k]
-                        bbox[2] = proposals[n][:, i, j, 18 + k]
-                        bbox[3] = proposals[n][:, i, j, 27 + k]
+            for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
+                for img in range(MAX_NUM_IMGS):
+                    for i, j, k in np.ndindex(16, 16, 9):
+                        if train_selection_tensor[first][:, i, j, k, 0] == 1:
 
-                        pool5 = roi_pooling(image, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
-                        print(pool5.shape)
+                            bounding_box = np.zeros(4)
+                            bounding_box[0] = proposals[first][:, i, j, k]
+                            bounding_box[1] = proposals[first][:, i, j, 9 + k]
+                            bounding_box[2] = proposals[first][:, i, j, 18 + k]
+                            bounding_box[3] = proposals[first][:, i, j, 27 + k]
 
-                        #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
-                        #print(out.shape)
+                            pool5 = roi_pooling(feature_maps[first], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+                            print(pool5.shape)
+
+                            loss = sess.run(cls_loss, feed_dict={inputs: pool5,
+                                                                 classes: Y_batch[:, img, 0],
+                                                                 boxes: Y_batch[:, img, 1:5]})
+                            print(loss)
 
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
