@@ -59,13 +59,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
 EPOCHS_TRAINSTEP_1 = 12
-REGULARIZATION = 'elastic' # 'elastic' for elastic net regularization, 'ridge' for L2-R., 'lasso' for L1-R.
-L1_to_L2_ratio = 0.5
-LAMBDA = 1e-11
 LR_RPN = 0.001
-PIECEWISE = False
-PIECEWISE_LR = [1e-3, 1e-4, 5e-6]
-PIECEWISW_LR_IVALS = [np.int(np.floor(0.7*IMG_SIZE)), np.int(np.floor(0.9*IMG_SIZE))]
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -278,30 +272,21 @@ with tf.variable_scope('rpn'):
         with tf.name_scope('overall_loss'):
             overall_loss = rpn_cls_loss_normalized + REG_TO_CLS_LOSS_RATIO * rpn_reg_loss_normalized
 
-        with tf.name_scope('regularization'):
-            #var_names = [v.name for v in tf.trainable_variables(scope='rpn')]
-            rpn_vars = tf.trainable_variables(scope='rpn')
-            L1 = tf.reduce_sum(rpn_vars[0]) + tf.reduce_sum(rpn_vars[2]) + tf.reduce_sum(rpn_vars[4])
-            L2 = tf.nn.l2_loss(rpn_vars[0]) + tf.nn.l2_loss(rpn_vars[2]) + tf.nn.l2_loss(rpn_vars[4])
-            elastic = L1_to_L2_ratio * L1 + L2
-            if REGULARIZATION == 'ridge':
-                regularization_loss = L2
-            elif REGULARIZATION == 'lasso':
-                regularization_loss = L1
-            elif REGULARIZATION == 'elastic':
-                regularization_loss = L1_to_L2_ratio * L1 + L2
-            overall_loss = overall_loss + LAMBDA * regularization_loss
-
         with tf.variable_scope('costs_and_optimization'):
-            if PIECEWISE:
-                global_step = tf.Variable(0, trainable=False)
-                boundaries = PIECEWISW_LR_IVALS
-                values = PIECEWISE_LR
-                learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
-                #rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
-                rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
-            else:
-                rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
+            global_step = tf.Variable(0, trainable=False)
+            boundaries = [1200, 1600]
+            values = [0.001, 0.0001, 0.000005]
+            learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+
+            # rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
+            # rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
+            # rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
+            rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
+            # AMSGrad = AMSGrad(learning_rate)
+            # rpn_train_op = AMSGrad.minimize(overall_loss, global_step=global_step)
+
+            # regularizer = tf.nn.l2_loss(weights)
+            # loss = tf.reduce_mean(loss + beta * regularizer)
 
 
 ### Fast R-CNN
@@ -370,20 +355,15 @@ if __name__ == "__main__":
         proposals = []
         train_step = 0
 
-        x_b = None
-        y_b = None
-        preds = None
+        xt = None
+        yt = None
+        tpreds = None
+        tslt = None
+        gtt = None
         reg_loss_list = []
         cls_loss_list = []
         oal_loss_list = []
-        vx = None
-        vy = None
-        vpr =None
-        vrl = []
-        vcl = []
-        vll = []
 
-        iter = 0
 
         for epoch in range(EPOCHS_TRAINSTEP_1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
@@ -392,81 +372,34 @@ if __name__ == "__main__":
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
 
-                    _, lr_, lc_, ol, preds_ = sess.run(
-                        [rpn_train_op, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-                         predicted_coordinates],
+
+                    #pdb.set_trace()
+
+                    _, rp, lr, lc, ol = sess.run(
+                        [rpn_train_op, predicted_coordinates, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
                                    anchor_coordinates: anchors[first],
                                    groundtruth_coordinates: train_ground_truth_tensor[first],
-                                   # .reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS)),
-                                   selection_tensor: train_selection_tensor[
-                                       first]})  # ..reshape((BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3))})
+                                   selection_tensor: train_selection_tensor[first]}
+                    )
 
-                    # pdb.set_trace()
-                    x_b = X_batch
-                    y_b = Y_batch
-                    reg_loss_list.append(lr_)
-                    cls_loss_list.append(lc_)
-                    oal_loss_list.append(ol)
-                    preds = preds_
+                    xt = X_batch
+                    yt = Y_batch
+                    tpreds = rp
+                    tslt = train_selection_tensor[first]
                     gtt = train_ground_truth_tensor[first]
-                    slt = train_selection_tensor[first]
-                    f = first
+                    reg_loss_list.append(lr)
+                    cls_loss_list.append(lc)
+                    oal_loss_list.append(ol)
 
-                    iter += 1
-                    if iter % 10 == 0:
-                        print('iteration:', iter, 'reg loss:', lr_, 'cls loss:', lc_, 'overall loss:', ol)
+                    #if epoch + 1 == EPOCHS_TRAINSTEP_1:
+                    #    feature_maps.append(fm)
+                    #    proposals.append(rp)
 
-                import pickle
-                with open('dump.pkl', 'wb') as file:
-                    pickle.dump([x_b, y_b, preds, train_selection_tensor[f], train_ground_truth_tensor[f], reg_loss_list, cls_loss_list, oal_loss_list],
-                                file)
-
-        # Validation
-        for f in range(len(batcher.valid_data)):
-            X_batch = batcher.valid_data[f]
-            Y_batch = batcher.valid_labels[f]
-            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-            vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch.reshape((1, 256, 256, 3))})
-            vlr, vlc, vol, preds = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-                                             predicted_coordinates],
-                                            feed_dict={X: vgg16_conv5_3_relu,
-                                                       Y: np.array(Y_batch).reshape((1, 5, 7)),
-                                                       anchor_coordinates: anchors[f],
-                                                       groundtruth_coordinates: valid_ground_truth_tensor[f],
-                                                       selection_tensor: valid_selection_tensor[f]})
-
-            vx = X_batch
-            vy = Y_batch
-            vpr = preds
-            vrl.append(vlr)
-            vcl.append(vlr)
-            vll.append(vol)
-
-            import pickle
-
-        with open('vdump.pkl', 'wb') as file:
-            pickle.dump([vx, vy, vpr, valid_selection_tensor[f], valid_ground_truth_tensor[f],
-                         vrl, vcl, vll],
-                        file)
-
-
-
-
-
-
-
-
-
-
-                # #if epoch + 1 == EPOCHS_TRAINSTEP_1:
-                # #    feature_maps.append(fm)
-                # #    proposals.append(rp)
-                #
-                # if train_step % 9 == 0:
-                #     print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
-                # train_step += 1
+                    if train_step % 9 == 0:
+                        print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                    train_step += 1
 
         with open(RP_PATH, 'wb') as file:
             pickle.dump(proposals, file)
@@ -495,6 +428,8 @@ if __name__ == "__main__":
         #if STORE_VGG:
         #    vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
 
+        with open('dump.pkl', 'wb') as file:
+            pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
 
 
@@ -507,3 +442,18 @@ if __name__ == "__main__":
 
 
 
+
+
+
+
+        # # Validation
+        # for f in range(len(batcher.valid_data)):
+        #     X_batch = batcher.valid_data[f]
+        #     Y_batch = batcher.valid_labels[f]
+        #     vlr, vlc, vol = sess.run([rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+        #                               predicted_coordinates, clshead_conv1],
+        #                              feed_dict={X: np.array(X_batch).reshape((1, 256, 256, 3)),
+        #                                         Y: np.array(Y_batch).reshape((1, 256, 256, 3)),
+        #                                         anchor_coordinates: anchors[f],
+        #                                         groundtruth_coordinates: valid_ground_truth_tensor[f],
+        #                                         selection_tensor: valid_selection_tensor[f]})
