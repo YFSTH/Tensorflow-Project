@@ -20,37 +20,57 @@ Object detection is a computer technology prominent in the fields of computer vi
 \end{abstract}
 
 \section{Introduction}
-\label{sec:introduction}
 
-Object detection being used in a wide range of domains, from face recognition to tracking a ball in a football match, developing fast and accurate methods to achieve it is therefore critical to the progress in the aforementioned domains. On the \emph{PASCAL VOC 2012} benchmark \cite{voc} with the very deep convolutional neural network \emph{VGG16} \cite{vgg}, the Faster R-CNN of Ren et al. (2016) achieved 198 ms/img and 70.4\% \emph{mean Average Precision} (mAP) \cite{fasterrcnn}. It represents a net improvement over the earlier methods, with the R-CNN of Girshick et al. (2014) scoring 62.4\% mAP \cite{fastrcnn}, and the Fast R-CNN of Girshick (2015) reaching 1830 ms/img and 68.4\% mAP \cite{fasterrcnn}.
+Object detection being used in a wide range of domains, from face recognition to tracking a ball in a football match, developing fast and accurate methods to achieve it is therefore critical to the progress in the aforementioned domains. On the \emph{PASCAL VOC 2012} benchmark \cite{voc} with the very deep convolutional neural network \emph{VGG-16} \cite{vgg}, the Faster R-CNN of Ren et al. (2016) achieved 198 ms/img and 70.4\% \emph{mean Average Precision} (mAP) \cite{fasterrcnn}. It represents a net improvement over the earlier methods, with the R-CNN of Girshick et al. (2014) scoring 62.4\% mAP \cite{fastrcnn}, and the Fast R-CNN of Girshick (2015) reaching 1830 ms/img and 68.4\% mAP \cite{fasterrcnn}.
 
 The problem of object detection can be split into two smaller ones. The localization problem consists of localizing objects in the image, whereas assigning labels to the found objects amounts to solve the classification problem. Localization is especially important when the input image possibly contain more than one object. Without first localizing potential candidates, a traditional CNN would get confused with the multiple labels during the training, and as a result it may assign the wrong label to an object that just happened to frequently co-occur in the training data with the object to which that label actually corresponds. For example,  if a CNN is trained to recognize the object banana in an image, but that in the training data bananas often co-occur with grocery bags, the CNN once trained may start to classify images featuring grocery bags as featuring bananas even though they may actually contain no banana at all.
 
-Furthermore, localization is achieved by selecting the \emph{Region of Interests} (RoIs) on the input image that have a high "objectness" score. Earlier version of the R-CNN use either \emph{Selective Search} (SS), which greedily merges superpixels based on engineered low-level features \cite{ss}, or \emph{Edge Boxes} (EB), which use the number of contour wholly contained in a bounding box as object indicator \cite{eb}, to generate the RoIs. In a CPU implementation, SS takes 2 s/img, whereas EB takes 10$\times$ times less this value. The \emph{Region Proposal Network} (RPN) of the Faster R-CNN on the other hand achieves localization at nearly no cost (10 ms/img) by taking advantage of the GPU and sharing convolutions at test-time \cite{fasterrcnn}. The difference between the R-CNN and the Fast R-CNN in terms of object localization is that the former runs a CNN on top of each RoI, whereas the latter perform the feature extraction before generating the RoIs, thus running only one CNN over the entire image instead of many ($\sim$2000) \cite{fastrcnn}. By doing so, the Fast R-CNN actually share computation and greatly reduce the running time of the algorithm. For further processing of the RoIs in the Fast R-CNN, these are all resized and reshaped to the same size and form in the next (pooling) layer \cite{fastrcnn}.
+Furthermore, localization is achieved by selecting the \emph{Region of Interests} (RoIs) on the input image that have a high "objectness" score. Earlier version of the R-CNN use either \emph{Selective Search} (SS), which greedily merges superpixels based on engineered low-level features \cite{ss}, or \emph{Edge Boxes} (EB), which use the number of contour wholly contained in a bounding box as object indicator \cite{eb}, to generate the RoIs. In a CPU implementation, SS takes 2 s/img, whereas EB takes 10$\times$ times less this value. The \emph{Region Proposal Network} (RPN) of the Faster R-CNN on the other hand achieves localization at nearly no cost (10 ms/img) by taking advantage of the GPU and sharing convolutions at test-time \cite{fasterrcnn}. The difference between the R-CNN and the Fast R-CNN in terms of object localization is that the former runs a CNN on top of each RoI, whereas the latter perform the feature extraction before generating the RoIs, thus running only one CNN over the entire image instead of many ($\sim$2,000) \cite{fastrcnn}. By doing so, the Fast R-CNN actually share computation and greatly reduce the running time of the algorithm. For further processing of the RoIs in the Fast R-CNN, these are all resized and reshaped to the same size and form in the next (pooling) layer \cite{fastrcnn}.
 
 As for classification, the output of the multiple CNNs (for the R-CNN) or that of the resized and reshaped RoIs (for the Fast R-CNN) are fed into fully connected layers where they are classified by a SVM (for the R-CNN) or a softmax function (for the Fast R-CNN). From that point on, depending on the classifier's output, linear regression is applied to the RoIs' bounding boxes with high objectness score to refine their position \cite{fastrcnn}.
 
 All in all, the main difference between the Fast R-CNN and the Faster R-CNN is the latter's use of a RPN for localization instead of a SS or a EB. In the following section we will thus introduce and explain our own implementation of both the RPN and the Fast R-CNN, followed by the training of this Faster R-CNN on a toy-size problem. A third section will be on the different experiments we conducted with this Faster R-CNN. And last and not least, the fourth section of this paper will be to discuss the experiments' results, the performance of the Faster R-CNN and how it could possibly be improved.
 
-\section{Theory 2-3 pages}
-\label{sec:theory}
+\section{Data and Model Implementation}
 
-\subsection{Two-dimensional Electron Gas}
-Here, explain the concept of a 2-DEG in GaAs/AlGaAs. What is a 2-DEG and why does it arise?
+\subsection{General Network Structure}
+This implementation of the Faster R-CNN consists of a fixed VGG-16 model pre-trained on ILSVRC-2012, and custom-made RPN and Fast R-CNN. Code is available at ???.
 
-\subsection{Hall Effect}
-Explain the classical Hall effect in your own words. What do I measure at $B=0$? And what happens if $B>0$? Which effect gives rise to the voltage drop in the vertical direction?
+\subsection{Detailed Implementation}
 
-\subsection{Quantum Hall Effect}
+\paragraph{Region Proposal Network}
+As a localizer for the Faster R-CNN, the RPN takes an image (of any size) as input and outputs a set of rectangular RoIs, each with an objectness score. Just like it has been mentioned in the introduction, this network will be sharing a set of convolutional layers with the Fast R-CNN. This means that since we opted for the VGG-16 for this implementation, our RPN and Fast R-CNN will be sharing convolution in a total of 13 layers \cite{fasterrcnn}.
+
+To generate de RoIs, a small network is slid over a the conv feature output by the last shared conv layer. This network is fully connected to an $n \times n$ spatial window of the input conv feature map. Each sliding window is mapped to a lower-dimensional vector (512-d in our case). This vector is fed into two sibling fully-connected layers---a box-regression layer and a box-classification layer. We use $n = 3$ in this implementation, noting that the effective receptive field on the input image is large (228 pixels in our case). Because the mini-network operates in a sliding-window fashion, the fully-connected layers are shared across all spatial locations. This architecture is implemented with an $n \times n$ conv layer followed by two sibling $1 \times 1$ conv layers (for the box-regression layer and the box-classification layer, respectively). ReLUs are applied to the output of the $n \times n$ conv layer \cite{fasterrcnn}.
+\\
+\\
+At each sliding-window location, $k$ RoIs are simultaneously predicted, so the box-regression layer has $4k$ output encoding the coordinates of $k$ boxes. The box-classification layer outputs $2k$ scores that estimate probability of object / not-object for each RoI. The $k$ proposals are parameterized relative to $k$ \emph{anchors} \cite{fasterrcnn}. Each anchor is centered at the sliding window in question, and is associated with a scale and aspect ratio. There are typically 3 scales and 3 aspect ratios, yielding $k = 9$ anchors at each sliding position. For a conv feature map of a size $W \times H$ (typically $\sim$2,400), there are $WHk$ anchors in total. An important property of this approach is that it is \emph{translation invariant} and \emph{size invariant}, both in terms of the anchors and the functions that compute proposals relative to the anchors \cite{fasterrcnn}.
+\\
+\\
+For the RPN training, a binary class label (of being an object or not) is assigned to each anchor. A positive label is assigned to two kinds of anchors: (i) the anchor/anchors with the highest \emph{Intersection-over-Union} (IoU) overlap with a ground-truth box, or (ii) an anchor that has an IoU overlap higher than 0.7 with any ground-truth box. Note that a single ground-truth box may assign positive labels to multiple anchors. A negative label is assigned to a non-positive anchor if its IoU ratio is lower than 0.3 for all ground-truth boxes. Anchors that are neither positive nor negative do not contribute to the training objective. With these definitions, an objective function is minimized following the multi-task loss in Fast R-CNN \cite{fastrcnn}.
+\\
+\\
+The loss function for an image is defined as:
+
+$$L({p_i},{t_i}) = \frac{1}{N_{cls}} \sum_i L_{cls} (p_i,p_i^*) + \lambda \frac{1}{N_{reg}} \sum_i p_i^* L_{reg} (t_i,t_i^*).$$
+
+\noindent Here, 
+
+\paragraph{Fast Regional Convolutional Neural Network}
+
+\subsection{Training Steps}
 Explain the IQHE in your own words. What does the density of states look like in a 2-DEG when $B=0$? What are Landau levels and how do they arise? What are edge states? What does the electron transport look like when you change the magnetic field? What do you expect to measure?
 
-\section{Experiment 1-2 pages}
-\subsection{Fabrication}
+\section{Experiments}
+
+\subsection{Experimental Set-up}
 Explain a step-by-step recipe for fabrication here. How long did you etch and why? What is an Ohmic contact?
-\subsection{Experimental set-up}
+
+\subsection{Results}
 Explain the experimental set-up here. Use a schematic picture (make it yourself in photoshop, paint, ...) to show how the components are connected. Briefly explain how a lock-in amplifier works.
 
-\section{Results and interpretation 2-3 pages}
+\section{Discussion}
+
 Show a graph of the longitudinal resistivity ($\rho_{xx}$) and Hall resistivity ($\rho_{xy}$) versus magnetic field, extracted from the raw data shown in figure \ref{fig:data}. You will have the link to the data in your absalon messages, if not e-mail Guen (guen@nbi.dk). Explain how you calculated these values, and refer to the theory.
 
 \begin{figure}
@@ -60,7 +80,7 @@ Show a graph of the longitudinal resistivity ($\rho_{xx}$) and Hall resistivity 
 \end{figure}
 
 \subsection{Classical regime}
-Calculate the sheet electron density $n_{s}$ and electron mobility $\mu$ from the data in the low-field regime, and refer to the theory in section \ref{sec:theory}. Explain how you retrieved the values from the data (did you use a linear fit?).
+Calculate the sheet electron density $n_{s}$ and electron mobility $\mu$ from the data in the low-field regime, and refer to the theory in section. Explain how you retrieved the values from the data (did you use a linear fit?).
 Round values off to 1 or 2 significant digits: 8.1643 ~= 8.2. Also, 5e-6 is easier to read than 0.000005.
 
 !OBS: This part is optional (only if you have time left).
@@ -72,7 +92,8 @@ Show a graph of the longitudinal conductivity ($\rho_{xx}$) and Hall conductivit
 Show a graph of the plateau number versus its corresponding value of $1/B$. From this you can determine the slope, which you use to calculate the electron density.
 Again, calculate the uncertainty for your obtained values.
 
-\section{Discussion 1/2-1 page}
+\section{Conclusion}
+
 Discuss your results. Compare the two values of $n_{s}$ that you've found in the previous section. Compare your results with literature and comment on the difference. If you didn't know the value of the resistance quantum, would you be able to deduce it from your measurements? If yes/no, why?
 
 \newpage
