@@ -62,8 +62,10 @@ EPOCHS_TRAINSTEP_1 = 12
 REGULARIZATION = 'elastic' # 'elastic' for elastic net regularization, 'ridge' for L2-R., 'lasso' for L1-R.
 L1_to_L2_ratio = 0.5
 LAMBDA = 1e-11
+LR_RPN = 0.001
+PIECEWISE = False
 PIECEWISE_LR = [1e-3, 1e-4, 5e-6]
-PIECEWISW_LR_IVALS = [np.int(np.floor(0.55*IMG_SIZE)), np.int(np.floor(0.85*IMG_SIZE))]
+PIECEWISW_LR_IVALS = [np.int(np.floor(0.7*IMG_SIZE)), np.int(np.floor(0.9*IMG_SIZE))]
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -291,13 +293,15 @@ with tf.variable_scope('rpn'):
             overall_loss = overall_loss + LAMBDA * regularization_loss
 
         with tf.variable_scope('costs_and_optimization'):
-            global_step = tf.Variable(0, trainable=False)
-            boundaries = PIECEWISW_LR_IVALS
-            values = PIECEWISE_LR
-            learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
-            #rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
-            rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
-            #rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
+            if PIECEWISE:
+                global_step = tf.Variable(0, trainable=False)
+                boundaries = PIECEWISW_LR_IVALS
+                values = PIECEWISE_LR
+                learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+                #rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
+                rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
+            else:
+                rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
 
 
 ### Fast R-CNN
