@@ -19,8 +19,8 @@ class Anchor(object):
         self.h = h
         # The following two variables will be used later to build a ground truth tensor matching the shape of the
         # anchor tensor and prediction tensor
-        self.w_idx = h_idx
-        self.h_idx = w_idx
+        self.w_idx = w_idx
+        self.h_idx = h_idx
         self.anchor_idx = anchor_idx
         self.lower_threshold = lower_threshold
         self.upper_threshold = upper_threshold
@@ -76,6 +76,7 @@ class Anchor(object):
             y1_a = y_t - dh
             y2_a = y_t + dh
 
+
         if ~(x1_t > x2_a or x1_a > x2_t or y1_t > y2_a or y1_a > y2_t): # if anchor and ground truth box intersect
             # calculate coordinates of intersection rectangle
             x1_i = max(x1_a, x1_t)
@@ -99,12 +100,14 @@ class Anchor(object):
 
             upper_threshold = 0.70
 
+
             for b in self.groundTruthBoxes:
 
                 iuo = self.intersectionsOfUnions[self.groundTruthBoxes.index(b)]
                 max_iou_box = max(b.ious)
                 max_iou_anchor = max(self.intersectionsOfUnions)
-                best_box = (b == self.groundTruthBoxes[self.intersectionsOfUnions.index(max(self.intersectionsOfUnions))])
+                best_box = (b == self.groundTruthBoxes[
+                    self.intersectionsOfUnions.index(max(self.intersectionsOfUnions))])
                 best_anchor = (self == b.anchors[b.ious.index(max(b.ious))])
 
                 if max_iou_box < self.upper_threshold and best_anchor:

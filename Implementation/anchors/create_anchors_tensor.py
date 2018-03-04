@@ -37,8 +37,8 @@ def get_anchors_centers(original_img_size, feature_map_size):
     Y = np.zeros((feature_map_size,feature_map_size))
     for row in range(feature_map_size):
         for col in range(feature_map_size):
-            Y[row,col] = row*receptive_field_size + int(receptive_field_size/2)
-            X[row,col] = col*receptive_field_size + int(receptive_field_size/2)
+            Y[row,col] = col*receptive_field_size + int(receptive_field_size/2)
+            X[row,col] = row*receptive_field_size + int(receptive_field_size/2)
     return X, Y
 
 

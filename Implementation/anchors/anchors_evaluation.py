@@ -81,9 +81,17 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
 
             #debugging_module(batch_anchor_tensor[collage], imgs[collage], labels[collage], gtt, slt, anchor_objects, ground_truth_boxes)
 
+     #       import matplotlib.pyplot as plt
+   ##         plt.imshow(imgs[collage]);
+  #          plt.show()
+ #           print(labels[collage])
+#            print(slt[:, :, 0, 1])
+            #pdb.set_trace()
+
             # select a certain amount of anchors (e.g. 256) and try to establish a certain ratio of positive to negative
             # anchors
             slt = anchors_selection(gtt, slt, num_selected)
+
 
             # testing/debugging:
             #tmp = slt
