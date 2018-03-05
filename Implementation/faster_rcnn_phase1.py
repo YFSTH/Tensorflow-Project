@@ -4,19 +4,20 @@
 import os
 import pdb
 import pickle
-
+import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
+
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
-from batch_generator import MNISTCollage
+from data_generation.batch_generator import MNISTCollage
 from data_generation.data_gen import *
 from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
 from vgg16.vgg16_nontrainsavable import VGG16
-
+from Proposals.createProposals import createProposals
 
 # Set class variables
 
@@ -58,7 +59,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 20
+EPOCHS_TRAINSTEP_1 = 1
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -338,6 +339,11 @@ if __name__ == "__main__":
     vgg16 = VGG16()
     vgg16.build(inputs)
 
+    train_proposals_img = []
+    train_proposals_fm = []
+    valid_proposals_img = []
+    valid_proposals_fm = []
+
     with tf.Session() as sess:
 
         # Initialize xor restore the required sub-models
@@ -355,25 +361,6 @@ if __name__ == "__main__":
         proposals = []
         train_step = 0
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         xt = None
         yt = None
         tpreds = None
@@ -390,8 +377,6 @@ if __name__ == "__main__":
 
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
-
-                    #pdb.set_trace()
 
                     _, rp, lr, lc, ol = sess.run(
                         [rpn_train_op, predicted_coordinates, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
@@ -411,6 +396,9 @@ if __name__ == "__main__":
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
 
+                    proposal_img, proposal_fm = createProposals(tpreds, tslt)
+                    train_proposals_img.append(proposal_img)
+                    train_proposals_fm.append(proposal_fm)
                     #if epoch + 1 == EPOCHS_TRAINSTEP_1:
                     #    feature_maps.append(fm)
                     #    proposals.append(rp)
@@ -419,11 +407,13 @@ if __name__ == "__main__":
                         print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     train_step += 1
 
+        with open('train_proposals.pkl', 'wb') as file:
+            pickle.dump([train_proposals_img, train_proposals_fm], file)
 
+        with open('dump.pkl', 'wb') as file:
+            pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
-
-
-        # Validation
+        # Validation ##################################################################################################
         vxt = None
         vyt = None
         vpreds = None
@@ -432,8 +422,6 @@ if __name__ == "__main__":
         vreg_loss_list = []
         vcls_loss_list = []
         voal_loss_list = []
-
-
 
         for f in range(len(batcher.valid_data)):
             result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
@@ -456,23 +444,22 @@ if __name__ == "__main__":
             vxt = X_batch
             vyt = Y_batch
             vpreds = pres
-            vslt = valid_ground_truth_tensor[f]
+            vslt = valid_selection_tensor[f]
             vgtt = valid_ground_truth_tensor[f]
             vreg_loss_list.append(vlr)
             vcls_loss_list.append(vlc)
             voal_loss_list.append(vol)
 
+            proposal_img, proposal_fm = createProposals(vpreds, vslt)
+            valid_proposals_img.append(proposal_img)
+            valid_proposals_fm.append(proposal_fm)
+
         with open('vdump.pkl', 'wb') as file:
             pickle.dump([vxt, vyt, vpreds, vslt, vgtt, vreg_loss_list, vcls_loss_list, voal_loss_list],
                         file)
 
-
-
-
-
-
-
-
+        with open('valid_proposals.pkl', 'wb') as file:
+            pickle.dump([valid_proposals_img, valid_proposals_fm], file)
 
         with open(RP_PATH, 'wb') as file:
             pickle.dump(proposals, file)
@@ -495,14 +482,19 @@ if __name__ == "__main__":
                         #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
                         #print(out.shape)
 
+
+
+
+
+
+
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
         #if STORE_VGG:
         #    vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
 
-        with open('dump.pkl', 'wb') as file:
-            pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
+
 
 
 
