@@ -53,28 +53,23 @@ def calculateIoU(proposal, ground_truth_box):
         return 0
 
 
-def selectProposals(iou_threshold, n_highest_cls_scores, logits, proposal_tensor, ground_truth_tensor,
+def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_tensor, ground_truth_tensor,
                      selection_tensor, training=True):
     # logits will be of shape: (BATCH_SIZE, 16, 16, NUM_ANCHORS*2)
-
     import numpy as np
-
     num_collages = len(proposal_tensor)
-
     if training:
         # only during training time can the proposals be filtered according to their overlap with the mnist images
         proposal_selection_tensor = np.zeros((num_collages, 16, 16, 9, 3))
-
         # reject proposals which have an IoU < iou_threshold with ground truth box
-
-        iter = 0
+        count = 0
         for c in range(num_collages):
             for x in range(16):
                 for y in range(16):
                     for t in range(9):
-                        pdb.set_trace()
-
                         if selection_tensor[c][0, x, y, t, 0] == 1:
+                            count += 1
+                            #
 
                             prop_x = proposal_tensor[c][0, x, y, t]
                             prop_y = proposal_tensor[c][0, x, y, t + 9]
@@ -89,48 +84,63 @@ def selectProposals(iou_threshold, n_highest_cls_scores, logits, proposal_tensor
                             proposal_selection_tensor[c, x, y, t, 1] = selection_tensor[c][0, x, y, t, 1]
                             # save iou of proposal with mnist image in selection proposal tensor
                             proposal_selection_tensor[c, x, y, t, 2] = iou
-                            iter += 1
-                            if iou > iou_threshold:
+
+                            if iou >= iou_threshold:
                                 # memorize in proposal selection tensor that this proposal is not filtered out
                                 proposal_selection_tensor[c, x, y, t, 0] = 1
                             # the proposal tensor will contain: (collage#, x_fm, y_fm, anchor#, [type, mnist_image {only during train phase}, iou {only during train phase}])
 
-    return proposal_selection_tensor
+    print('ende first step\n\n')
+    logits = np.array(logits)
+    # shape (700, 1, 16, 16, 18)
+    pdb.set_trace()
 
-    # pdb.set_trace()
-    # # select n best proposals using the cls score amongst proposals over all collages
-    # selection_array = np.array(selection_tensor)
-    # logits = np.array(logits)
-    #
-    #
-    # # calculate the predicted probability that the proposal catches an object
-    # probabilities = np.zeros((num_collages, 16, 16, 9)) - 1
-    # for c in range(num_collages):
-    #     for x in range(16):
-    #         for y in range(16):
-    #             for t in range(9):
-    #                 # use softmax to get predicted probability of being an object
-    #                 nominator = np.exp(logits[0, x, y, t, 0])
-    #                 denominator = np.sum(np.exp(logits[0, x, y, t, 0]) + np.exp(logits[0, x, y, t, 0]))
-    #                 # save predicted probability in probabilities tensor
-    #                 probabilities[c, x, y, t] = 1 - (nominator / denominator)
-    #
-    # # get indices of positive anchors
-    # idxs_of_pos_anchors = np.where(selection_array[:,0,:,:,:,0]==1)
-    # # now we have the indices of the probabilities of the positive anchors
-    # cls_scores_pos_anchs = probabilities[idxs_of_pos_anchors]
-    # # now we have the cls scores of the positive anchors
-    # idxs_of_n_highest_cls_scores = cls_scores_pos_anchs.argsort()[-n_highest_cls_scores]
-    # choosen_idxs = np.array(idxs_of_pos_anchors)[idxs_of_n_highest_cls_scores]
-    #
-    # # mark the proposal as choosen if it was not sorted out yet
-    # for idx in choosen_idxs:
-    #     if proposal_selection_tensor[idx, 0] == 1:
-    #         proposal_selection_tensor[idx, 0] = 3
-    #
-    # return proposal_selection_tensor
-    #
-    #
-    #
-    #
-    # # TODO: muss alles nach allen trainingsepochen geschehen
+    # calculate the predicted probability that the proposal catches an object
+    probabilities = np.zeros((num_collages, 16, 16, 9)) - 1
+    counter, counter2 = 0, 0
+    for c in range(num_collages):
+        for x in range(16):
+            for y in range(16):
+                for t in range(9):
+                    # perform softmax with max trick
+                    x1 = logits[c, 0, x, y, t * 2]
+                    x2 = logits[c, 0, x, y, 1 + t * 2]
+                    # apply max trick to avoid computational problems
+                    x1_ = x1 - max(x1, x2)
+                    x2_ = x2 - max(x1, x2)
+                    pos_prob = 1 - ( np.exp(x1_) / (np.exp(x1_) + np.exp(x2_)))
+                    # save predicted probability in probabilities tensor
+                    probabilities[c, x, y, t] = pos_prob
+
+    # select n best proposals using the cls score amongst proposals over all collages
+    selection_array = np.squeeze(np.array(selection_tensor))
+
+    # (700, 1, 16, 16, 9, 3)
+
+    # get indices of positive anchors
+
+    idxs_of_pos_anchors = np.where(selection_array[:, :, :, :, 0] == 1)
+
+    # now we have the indices of the probabilities of the positive anchors
+    cls_scores_pos_anchs = probabilities[idxs_of_pos_anchors]
+    # now we have the cls scores of the positive anchors
+    subidxs_of_n_highest_cls_scores = cls_scores_pos_anchs.argsort()[-n_highest_cls_scores:]
+    choosen_idxs = np.array(idxs_of_pos_anchors)[:, subidxs_of_n_highest_cls_scores]
+
+    # mark the proposal as choosen if it was not sorted out yet
+    updated_proposal_sel_tensor = np.zeros((num_collages, 16, 16, 9, 3))
+    updated_proposal_sel_tensor[:, :, :, :, 1] = proposal_selection_tensor[:, :, :, :, 1]
+    updated_proposal_sel_tensor[:, :, :, :, 2] = proposal_selection_tensor[:, :, :, :, 2]
+    iter = 0
+    for i in range(n_highest_cls_scores):
+        choosen_idx = choosen_idxs[:, i]
+        idx_in_proposal_sel_tensor = tuple(choosen_idx) + (0,)
+
+        if proposal_selection_tensor[idx_in_proposal_sel_tensor] == 1:
+            updated_proposal_sel_tensor[idx_in_proposal_sel_tensor] = 1
+
+    return updated_proposal_sel_tensor
+
+
+
+

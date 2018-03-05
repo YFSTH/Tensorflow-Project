@@ -60,7 +60,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 7
+EPOCHS_TRAINSTEP_1 = 1
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -269,8 +269,7 @@ with tf.variable_scope('rpn'):
                     [tf.multiply(tmp4, tf.cast(idxi, tf.float32)), tf.multiply(tmp4, tf.cast(idx, tf.float32))], axis=1)
 
                 # calculate the cross entropy loss
-                rpn_cls_loss = tf.reduce_sum(
-                    tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
+                rpn_cls_loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
                 rpn_cls_loss_normalized = tf.truediv(rpn_cls_loss, tf.cast(NUM_SELECTED_ANCHORS, tf.float32))
 
         with tf.name_scope('overall_loss'):
@@ -383,8 +382,10 @@ if __name__ == "__main__":
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
 
+
                     _, rp, logits__, lr, lc, ol = sess.run(
-                        [rpn_train_op, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                        [rpn_train_op, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized,
+                         rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
                                    anchor_coordinates: anchors[first],
@@ -425,12 +426,11 @@ if __name__ == "__main__":
 
 
 
-        proposal_selection_tensor = selectProposals(iou_threshold=0.15, n_highest_cls_scores=200, logits=logits_,
+        proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=300, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
         pdb.set_trace()
-
         # Validation ##################################################################################################
         vxt = None
         vyt = None
