@@ -18,6 +18,7 @@ from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
 from vgg16.vgg16_nontrainsavable import VGG16
 from Proposals.createProposals import createProposals
+from Proposals.selectProposals import *
 
 # Set class variables
 
@@ -59,7 +60,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 7
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -244,7 +245,7 @@ with tf.variable_scope('rpn'):
             with tf.variable_scope('classification_loss'):
                 # filter logits for the 256 to be activated anchors
                 logits = tf.reshape(clshead_conv1, [BATCH_SIZE * VGG_FM_SIZE * VGG_FM_SIZE * NUM_ANCHORS, 2])
-                # shape: (Batch size * fm size * fm size, 2)
+
                 reshaped_targets = tf.reshape(selection_tensor[:, :, :, :, 0],
                                               [BATCH_SIZE * VGG_FM_SIZE * VGG_FM_SIZE * NUM_ANCHORS, 1])
                 # shape: (Batch size * fm size * fm size, 1)
@@ -252,11 +253,13 @@ with tf.variable_scope('rpn'):
                 inclusion_idxs = tf.greater_equal(reshaped_targets, 0)
                 # 256 True, rest False
 
+                # filter out all neutral anchors
                 tmp2 = tf.boolean_mask(tf.reshape(logits[:, 0], [tf.shape(logits)[0], 1]), inclusion_idxs)
                 tmp3 = tf.boolean_mask(tf.reshape(logits[:, 1], [tf.shape(logits)[0], 1]), inclusion_idxs)
                 logits_filtered = tf.concat(
                     [tf.reshape(tmp2, [tf.shape(tmp2)[0], 1]), tf.reshape(tmp3, [tf.shape(tmp3)[0], 1])], axis=1)
 
+                # create target vector
                 # filter label entries according to the filtered logits
                 sampled_targets = tf.reshape(tf.boolean_mask(reshaped_targets, inclusion_idxs), [tf.shape(tmp3)[0], 1])
                 tmp4 = tf.ones_like(sampled_targets)
@@ -343,6 +346,7 @@ if __name__ == "__main__":
     train_proposals_fm = []
     valid_proposals_img = []
     valid_proposals_fm = []
+    logits_ = []
 
     with tf.Session() as sess:
 
@@ -361,11 +365,12 @@ if __name__ == "__main__":
         proposals = []
         train_step = 0
 
+
         xt = None
         yt = None
         tpreds = None
-        tslt = None
-        gtt = None
+        tslt = []
+        gtt = []
         reg_loss_list = []
         cls_loss_list = []
         oal_loss_list = []
@@ -378,8 +383,8 @@ if __name__ == "__main__":
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
 
-                    _, rp, logits, lr, lc, ol = sess.run(
-                        [rpn_train_op, predicted_coordinates, logits_filtered, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                    _, rp, logits__, lr, lc, ol = sess.run(
+                        [rpn_train_op, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
                                    anchor_coordinates: anchors[first],
@@ -390,15 +395,16 @@ if __name__ == "__main__":
                     xt = X_batch
                     yt = Y_batch
                     tpreds = rp
-                    tslt = train_selection_tensor[first]
-                    gtt = train_ground_truth_tensor[first]
                     reg_loss_list.append(lr)
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
+                    tslt.append(train_selection_tensor[first])
+                    gtt.append(train_ground_truth_tensor[first])
 
-                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt)
+                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt[-1])
                     train_proposals_img.append(proposal_img)
                     train_proposals_fm.append(proposal_fm)
+                    logits_.append(logits__)
                     #if epoch + 1 == EPOCHS_TRAINSTEP_1:
                     #    feature_maps.append(fm)
                     #    proposals.append(rp)
@@ -407,11 +413,23 @@ if __name__ == "__main__":
                         print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     train_step += 1
 
-        with open('train_proposals.pkl', 'wb') as file:
-            pickle.dump([train_proposals_img, train_proposals_fm], file)
+
+
+        with open('proposal_debugging.pkl', 'wb') as file:
+            pickle.dump([logits_, train_proposals_img, gtt, tslt], file)
 
         with open('dump.pkl', 'wb') as file:
             pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
+
+            # select proposals according to IoU with mnist image and cls score
+
+
+
+        proposal_selection_tensor = selectProposals(iou_threshold=0.15, n_highest_cls_scores=200, logits=logits_,
+                                                    proposal_tensor=train_proposals_img,
+                                                    ground_truth_tensor=train_ground_truth_tensor,
+                                                    selection_tensor=train_selection_tensor, training=True)
+        pdb.set_trace()
 
         # Validation ##################################################################################################
         vxt = None
