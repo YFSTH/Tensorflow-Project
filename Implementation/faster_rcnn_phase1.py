@@ -55,7 +55,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 12
+EPOCHS_TRAINSTEP_1 = 1
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -353,7 +353,7 @@ if __name__ == "__main__":
 
         xt = None
         yt = None
-        tpreds = None
+        tpreds = []
         tslt = []
         gtt = []
         reg_loss_list = []
