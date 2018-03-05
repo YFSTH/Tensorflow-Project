@@ -62,15 +62,11 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
         # only during training time can the proposals be filtered according to their overlap with the mnist images
         proposal_selection_tensor = np.zeros((num_collages, 16, 16, 9, 3))
         # reject proposals which have an IoU < iou_threshold with ground truth box
-        count = 0
         for c in range(num_collages):
             for x in range(16):
                 for y in range(16):
                     for t in range(9):
                         if selection_tensor[c][0, x, y, t, 0] == 1:
-                            count += 1
-                            #
-
                             prop_x = proposal_tensor[c][0, x, y, t]
                             prop_y = proposal_tensor[c][0, x, y, t + 9]
                             prop_w = proposal_tensor[c][0, x, y, t + 18]
@@ -123,7 +119,7 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
     # now we have the indices of the probabilities of the positive anchors
     cls_scores_pos_anchs = probabilities[idxs_of_pos_anchors]
     # now we have the cls scores of the positive anchors
-    subidxs_of_n_highest_cls_scores = cls_scores_pos_anchs.argsort()[-n_highest_cls_scores:]
+    subidxs_of_n_highest_cls_scores = cls_scores_pos_anchs.argsort()[-max_n_highest_cls_scores:]
     choosen_idxs = np.array(idxs_of_pos_anchors)[:, subidxs_of_n_highest_cls_scores]
 
     # mark the proposal as choosen if it was not sorted out yet
@@ -131,12 +127,13 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
     updated_proposal_sel_tensor[:, :, :, :, 1] = proposal_selection_tensor[:, :, :, :, 1]
     updated_proposal_sel_tensor[:, :, :, :, 2] = proposal_selection_tensor[:, :, :, :, 2]
     iter = 0
-    for i in range(n_highest_cls_scores):
+    for i in range(max_n_highest_cls_scores):
         choosen_idx = choosen_idxs[:, i]
         idx_in_proposal_sel_tensor = tuple(choosen_idx) + (0,)
 
         if proposal_selection_tensor[idx_in_proposal_sel_tensor] == 1:
             updated_proposal_sel_tensor[idx_in_proposal_sel_tensor] = 1
+
 
     return updated_proposal_sel_tensor
 

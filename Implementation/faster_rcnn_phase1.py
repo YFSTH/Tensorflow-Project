@@ -443,7 +443,6 @@ if __name__ == "__main__":
                                                                              classes: gt_class,
                                                                              boxes: gt_bounding_box})
                         #print(loss)
-
         # Validation ##################################################################################################
         vxt = None
         vyt = None
