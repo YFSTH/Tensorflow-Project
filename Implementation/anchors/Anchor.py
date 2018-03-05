@@ -1,5 +1,3 @@
-import pdb
-
 class Anchor(object):
 
     def __init__(self, x, y, w, h, w_idx, h_idx, anchor_idx, lower_threshold, upper_threshold):

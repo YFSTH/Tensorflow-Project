@@ -1,5 +1,3 @@
-import pdb
-
 def create_ground_truth_tensor_and_selection_tensor(anchor_objects, ground_truth_boxes, num_anchors, fm_w_index, fm_h_index):
     '''
     The ground truth box tensor will contain the coordinates of the ground truth box which was assigned to the anchor,

@@ -353,7 +353,7 @@ if __name__ == "__main__":
 
         xt = None
         yt = None
-        tpreds = []
+        tpreds = None
         tslt = []
         gtt = []
         reg_loss_list = []
@@ -380,7 +380,7 @@ if __name__ == "__main__":
 
                     xt = X_batch
                     yt = Y_batch
-                    tpreds.append(rp)
+                    tpreds = rp
                     logits_.append(logits_)
                     reg_loss_list.append(lr)
                     cls_loss_list.append(lc)
@@ -464,7 +464,7 @@ if __name__ == "__main__":
                 [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
                  predicted_coordinates, clshead_conv1],
                 feed_dict={X: vgg16_conv5_3_relu,
-                           Y: np.array(Y_batch).reshape((1, 5, 7)),
+                           Y: np.array(Y_batch).reshape((1, MAX_NUM_IMGS, 7)),
                            anchor_coordinates: anchors[f],
                            groundtruth_coordinates: valid_ground_truth_tensor[f],
                            selection_tensor: valid_selection_tensor[f]})

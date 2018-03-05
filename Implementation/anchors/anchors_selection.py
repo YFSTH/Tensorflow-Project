@@ -1,6 +1,13 @@
-import pdb
-
 def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
+    '''
+    Not all of the anchors are used for the regression and classification task. For the regression only positive anchors
+    are used as training cases and for the classification a specified number of anchors (e.g. 256) is used where the
+    ratio of positive to negative anchors is maximally 1
+    :param ground_truth_tensor:
+    :param selection_tensor:
+    :param num_selected:
+    :return:
+    '''
 
     import numpy as np
 
