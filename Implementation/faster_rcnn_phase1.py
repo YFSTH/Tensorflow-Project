@@ -55,11 +55,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-<<<<<<< HEAD
-EPOCHS_TRAINSTEP_1 = 1
-=======
 EPOCHS_TRAINSTEP_1 = 5
->>>>>>> 58841103781972cb3b5494f35d5534c43a58f76c
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -290,7 +286,7 @@ with tf.variable_scope('fast_rcnn'):
 
     rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
     classes = tf.placeholder(tf.int32, [BATCH_SIZE])
-    boxes = tf.placeholder(tf.int32, [BATCH_SIZE, 4])
+    boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
 
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 4096, False, tf.nn.relu)
@@ -300,16 +296,17 @@ with tf.variable_scope('fast_rcnn'):
 
     with tf.variable_scope('bbox_pred'):
         bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
-        # TODO: Implement loss for regression
+        bbox_diff = bbox_pred - boxes
+        bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
+        bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
+        bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
 
     with tf.variable_scope('cls_score'):
         cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+        cls_loss = tf.nn.softmax(cls_score)
 
-    with tf.variable_scope('cls_prob'):
-        cls_prob = fully_connected(cls_score, 10, False, None)
-        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_prob))
-
-    cls_train = tf.train.AdamOptimizer(LR_FAST).minimize(cls_loss)
+    fast_loss = tf.reduce_sum(cls_loss + bbox_loss)
+    fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
 
 ### Model initialization nodes
@@ -411,7 +408,7 @@ if __name__ == "__main__":
 
 
         # select proposals according to IoU with mnist image and cls score
-        proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=500, logits=logits_,
+        proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=380000, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
@@ -427,22 +424,21 @@ if __name__ == "__main__":
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
-                        #print(bounding_box)
-
                         pool5 = roi_pooling(image, bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
-                        gt_bounding_box = np.zeros((BATCH_SIZE, 4), dtype=np.int32)
-                        gt_bounding_box[:, 0] = train_proposals_img[n][:, i, j, k]
-                        gt_bounding_box[:, 1] = train_proposals_img[n][:, i, j, 9 + k]
-                        gt_bounding_box[:, 2] = train_proposals_img[n][:, i, j, 18 + k]
-                        gt_bounding_box[:, 3] = train_proposals_img[n][:, i, j, 27 + k]
+                        gt_bounding_box = np.zeros((BATCH_SIZE, 40))
+                        gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
+                        gt_bounding_box[:, 10:19] = train_proposals_img[n][:, i, j, 9 + k]
+                        gt_bounding_box[:, 20:29] = train_proposals_img[n][:, i, j, 18 + k]
+                        gt_bounding_box[:, 30:39] = train_proposals_img[n][:, i, j, 27 + k]
 
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, loss = sess.run([cls_train, cls_loss], feed_dict={rois: pool5,
-                                                                             classes: gt_class,
-                                                                             boxes: gt_bounding_box})
-                        #print(loss)
+                        _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
+                                                                               classes: gt_class,
+                                                                               boxes: gt_bounding_box})
+                        print(loss)
+
         # Validation ##################################################################################################
         vxt = None
         vyt = None
