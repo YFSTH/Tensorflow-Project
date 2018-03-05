@@ -124,7 +124,7 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
     updated_proposal_sel_tensor[:, :, :, :, 1] = proposal_selection_tensor[:, :, :, :, 1]
     updated_proposal_sel_tensor[:, :, :, :, 2] = proposal_selection_tensor[:, :, :, :, 2]
     iter = 0
-    for i in range(max_n_highest_cls_scores):
+    for i in range(max_n_highest_cls_scores - 1):
         choosen_idx = choosen_idxs[:, i]
         idx_in_proposal_sel_tensor = tuple(choosen_idx) + (0,)
 

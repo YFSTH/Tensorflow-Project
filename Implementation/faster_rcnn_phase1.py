@@ -31,8 +31,8 @@ MAX_NUM_IMGS = 5
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 3  # original MNIST images size is 28x28
-MAX_SCALING = 3
+MIN_SCALING = 2.5  # original MNIST images size is 28x28
+MAX_SCALING = 2.5
 SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
@@ -45,19 +45,19 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [84, 84, 84]
-ANCHORS_RATIOS = [1, 1, 1]
+ANCHORS_SCALES = [70, 70, 70]
+ANCHORS_RATIOS = [1.0, 1.0, 1.0]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
 LOWER_THRESHOLD = 0.30
-UPPER_THRESHOLD = 0.70
+UPPER_THRESHOLD = 0.60
 NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 
-LR_RPN = 0.001
+#LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -68,7 +68,7 @@ RPN_PATH = './checkpoints/rpn.ckpt'
 FINALLY_VALIDATE = True
 
 # Fast R-CNN
-ROI_FM_SIZE = 8
+ROI_FM_SIZE = 12
 EPOCHS_TRAINSTEP_2 = 1
 LR_FAST = 0.001
 STORE_FAST = True
@@ -167,7 +167,7 @@ with tf.variable_scope('rpn'):
             with tf.variable_scope('regression_loss'):
                 def smooth_l1_loss(raw_deviations, selection_tensor):
                     # raw deviations of shape (4, 16, 16, 9)
-                    # select deviations for anchors marked as positive
+                    # lect deviations for anchors marked as positive
                     activation_value = tf.constant(1.0, dtype=tf.float32)
                     filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
 
@@ -413,7 +413,6 @@ if __name__ == "__main__":
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
 
-        pdb.set_trace()
 
 
 
