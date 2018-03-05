@@ -1,23 +1,23 @@
 ### Preparation #######################################################################################################
 
 # Import packages
+import datetime
 import os
 import pdb
 import pickle
-import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-
 from anchors.create_anchors_tensor import *
 from anchors.anchors_evaluation import *
 from data_generation.batch_generator import MNISTCollage
-from data_generation.data_gen import *
+from data_generation.data_generator import *
 from functools import partial
 from network.layers import convolutional, fully_connected, roi_pooling
+from proposals.createProposals import createProposals
 from vgg16.vgg16_nontrainsavable import VGG16
-from Proposals.createProposals import createProposals
 
 # Set class variables
 
@@ -59,7 +59,7 @@ VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 10
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -96,8 +96,8 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # height "                                       " fourth "                      "
 
 # Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
-eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS, num_selected=NUM_SELECTED_ANCHORS,
-               lower_threshold=LOWER_THRESHOLD, upper_threshold=UPPER_THRESHOLD)
+eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS,
+               num_selected=NUM_SELECTED_ANCHORS, lower_threshold=LOWER_THRESHOLD, upper_threshold=UPPER_THRESHOLD)
 train_ground_truth_tensor, train_selection_tensor = eval(imgs=batcher.train_data, labels=batcher.train_labels, filename='train_anchors')
 valid_ground_truth_tensor, valid_selection_tensor = eval(imgs=batcher.valid_data, labels=batcher.valid_labels, filename='valid_anchors')
 test_ground_truth_tensor, test_selection_tensor = eval(imgs=batcher.test_data, labels=batcher.test_labels, filename='test_anchors')
@@ -121,15 +121,6 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 
 
 ### Data Flow Graph Construction Phase ################################################################################
-
-### ImageNet
-
-#with tf.variable_scope('imagenet'):
-#    X = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
-#    Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
-#    vgg16 = VGG16(vgg16_npy_path=VGG16_PATH)
-#    vgg16.build(X)
-
 
 ### Region Proposal Network RPN
 
@@ -317,15 +308,12 @@ with tf.variable_scope('fast_rcnn'):
 ### Model saving nodes
 
 with tf.name_scope('model_savers'):
-    #vgg_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
     rpn_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
     fast_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
 ### Model initialization nodes
 
 with tf.name_scope('model_initializers'):
-    #init = tf.global_variables_initializer()
-    #vgg_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='imagenet'))
     rpn_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
     fast_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
@@ -335,9 +323,9 @@ with tf.name_scope('model_initializers'):
 if __name__ == "__main__":
 
     # Load pretrained VGG16 and get handle on input placeholder
-    inputs = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
+    images = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
     vgg16 = VGG16()
-    vgg16.build(inputs)
+    vgg16.build(images)
 
     train_proposals_img = []
     train_proposals_fm = []
@@ -350,13 +338,11 @@ if __name__ == "__main__":
         #restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
         #restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         #restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
-        #if ~RESTORE_VGG:
-        #    sess.run(vgg_init)
 
-        # TODO: Using the non-trainable VGG version
         sess.run(tf.global_variables_initializer())
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+
         feature_maps = []
         proposals = []
         train_step = 0
@@ -376,7 +362,7 @@ if __name__ == "__main__":
                 if BATCH_SIZE == 1:
 
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-                    vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
+                    vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch})
 
                     _, rp, logits, lr, lc, ol = sess.run(
                         [rpn_train_op, predicted_coordinates, logits_filtered, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
@@ -399,6 +385,7 @@ if __name__ == "__main__":
                     proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt)
                     train_proposals_img.append(proposal_img)
                     train_proposals_fm.append(proposal_fm)
+
                     #if epoch + 1 == EPOCHS_TRAINSTEP_1:
                     #    feature_maps.append(fm)
                     #    proposals.append(rp)
@@ -429,8 +416,7 @@ if __name__ == "__main__":
             X_batch = batcher.valid_data[f]
             Y_batch = batcher.valid_labels[f]
 
-            vgg16_conv5_3_relu = sess.run(result_tensor,
-                                          feed_dict={inputs: X_batch.reshape((1, 256, 256, 3))})
+            vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch.reshape((1, 256, 256, 3))})
 
             vlr, vlc, vol, pres, clss = sess.run(
                 [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
@@ -461,10 +447,10 @@ if __name__ == "__main__":
         with open('valid_proposals.pkl', 'wb') as file:
             pickle.dump([valid_proposals_img, valid_proposals_fm], file)
 
-        with open(RP_PATH, 'wb') as file:
-            pickle.dump(proposals, file)
-        with open(FM_PATH, 'wb') as file:
-            pickle.dump(feature_maps, file)
+        #with open(RP_PATH, 'wb') as file:
+        #    pickle.dump(proposals, file)
+        #with open(FM_PATH, 'wb') as file:
+        #    pickle.dump(feature_maps, file)
 
         #for epoch in range(EPOCHS_TRAINSTEP_2):
         #    for n, image in enumerate(feature_maps):

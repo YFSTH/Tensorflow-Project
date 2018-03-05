@@ -4,5 +4,6 @@ __pycache__
 .idea
 *.npy
 *.pkl
+/Implementation/.ipynb_checkpoints
 /Implementation/checkpoints
 /Implementation/summaries
