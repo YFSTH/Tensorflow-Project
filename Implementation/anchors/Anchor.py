@@ -7,7 +7,8 @@ class Anchor(object):
         The anchor objects are used to ease the identification of the optimal ground truth box (e.g. representing an
         mnist image) assigned to the respective anchor and to initially classify the anchor as positive, negative or
         neutral. Though, for the handling of anchor coordinates and the predicted coordinates of the RoIs is mainly
-        done by multidimensional matrices / tensors to ease the procedure in tensorflow.
+        done by multidimensional matrices / tensors to ease the procedure in tensorflow. Only during training
+        the optimal ground truth box is assigned to the anchor for regression.
         :param x: x coordinate of the center of the anchor in the collage, where for even width anchors the 'center
                   pixel' is defined as the pixel at position ((w/2) - 1)
         :param y: y coordinate of the center of the anchor in the collage, where for even width anchors the 'center
@@ -20,16 +21,7 @@ class Anchor(object):
         :param lower_threshold: if the anchor has no IoU >= lower_threshold its type will be negative
         :param upper_threshold: if the anchor´s  highest IoU with a ground truth box is between the lower and the upper
                                 threshold it will be neutral, if it exceeds the higher threshold it will be positive
-        :param groundTruthBoxes: the ground truth boxes the anchor could be assigned to
-        :param intersectionOfUnions: the IoU of the anchor with these ground truth boxes
-        :param assigned_ground_truth_box: the optimal ground truth box is assigned to the anchor according to the
-                                          following rules: 1. if the anchor has an IoU > 0.70 with the box and the box
-                                          is the box the anchor has the highest IoU with or 2. if the box has no other
-                                          anchor it has an higher IoU with then the box will be finally assigned to the
-                                          anchor.
-        :param assigned_iou: The IoU with the box which was assigned to the anchor.
-        :param type: Anchor is positive if a box was assigned according to the above rules, if not then it is either
-                     2. neutral (0.70 > max IoU >= 0.30) or negative (max IoU < = 0.30).
+
         '''
         self.x = x
         self.y = y
@@ -146,10 +138,12 @@ class Anchor(object):
                     self.assigned_iou = iuo
 
                 elif max_iou_anchor < self.lower_threshold and best_box:
+                    # if the box is the box the anchor has the highest IoU with but it is below 0.70 mark the anchor to
+                    # be negative
                     self.type = 'negative'
                     self.assigned_iou = iuo
-
         else:
+            # if no box was assigned to the anchor
             self.type = 'negative'
 
 

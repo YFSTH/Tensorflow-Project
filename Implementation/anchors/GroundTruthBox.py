@@ -1,6 +1,18 @@
 class GroundTruthBox:
+    '''
+    Ground truth boxes are used to evaluate the best fit ground truth box during training, however, the main coordinate
+    handling is done by multidimensional matrices (see also Anchor.py for a more detailed description).
+    '''
 
     def __init__(self, x, y, w, h, label):
+        '''
+        Initializer
+        :param x: center x coordinate of the ground truth box
+        :param y: center y coordinate of the ground truth box
+        :param w: width of the ground truth box
+        :param h: height of the ground truth box
+        :param label: mnist number class the ground truth box represents
+        '''
         # initially set
         self.x = x
         self.y = y
@@ -12,11 +24,11 @@ class GroundTruthBox:
         self.ious = []
 
     def add_anchor(self, anchor, iou):
+        '''
+        Adds an anchor to the ground truth box
+        :param anchor: anchor object
+        :param iou: IoU between anchor and ground truth box
+        :return: nothing, but assigns anchor and IoU to the respective lists
+        '''
         self.anchors.append(anchor)
         self.ious.append(iou)
-
-    def get_best_anchor(self):
-        if len(self.anchors) > 0:
-            index = self.ious.index(max(self.ious))
-            return self.anchors[index], self.ious[index]
-        return None

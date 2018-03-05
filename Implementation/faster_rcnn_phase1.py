@@ -27,12 +27,12 @@ from vgg16.vgg16_nontrainsavable import VGG16
 NUM_COLLAGES = 100
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
-MAX_NUM_IMGS = 5
+MAX_NUM_IMGS = 4
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 2.5  # original MNIST images size is 28x28
-MAX_SCALING = 2.5
+MIN_SCALING = 3  # original MNIST images size is 28x28
+MAX_SCALING = 3
 SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
@@ -45,7 +45,7 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [70, 70, 70]
+ANCHORS_SCALES = [85, 84, 84]
 ANCHORS_RATIOS = [1.0, 1.0, 1.0]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
@@ -380,7 +380,8 @@ if __name__ == "__main__":
 
                     xt = X_batch
                     yt = Y_batch
-                    tpreds = rp
+                    tpreds.append(rp)
+                    logits_.append(logits_)
                     reg_loss_list.append(lr)
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
