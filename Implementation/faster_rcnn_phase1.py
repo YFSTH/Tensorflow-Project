@@ -378,8 +378,8 @@ if __name__ == "__main__":
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
 
-                    _, rp, lr, lc, ol = sess.run(
-                        [rpn_train_op, predicted_coordinates, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                    _, rp, logits, lr, lc, ol = sess.run(
+                        [rpn_train_op, predicted_coordinates, logits_filtered rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
                                    anchor_coordinates: anchors[first],
@@ -396,7 +396,7 @@ if __name__ == "__main__":
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
 
-                    proposal_img, proposal_fm = createProposals(tpreds, tslt)
+                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt, logits)
                     train_proposals_img.append(proposal_img)
                     train_proposals_fm.append(proposal_fm)
                     #if epoch + 1 == EPOCHS_TRAINSTEP_1:
@@ -450,7 +450,7 @@ if __name__ == "__main__":
             vcls_loss_list.append(vlc)
             voal_loss_list.append(vol)
 
-            proposal_img, proposal_fm = createProposals(vpreds, vslt)
+            proposal_img, proposal_fm, valid_selection_tensor[f] = createProposals(vpreds, vslt)
             valid_proposals_img.append(proposal_img)
             valid_proposals_fm.append(proposal_fm)
 

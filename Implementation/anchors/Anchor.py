@@ -71,11 +71,10 @@ class Anchor(object):
         else:
             dw = np.floor(w_t / 2)
             dh = np.floor(h_t / 2)
-            x1_a = x_t - dw
-            x2_a = x_t + dw
-            y1_a = y_t - dh
-            y2_a = y_t + dh
-
+            x1_t = x_t - dw
+            x2_t = x_t + dw
+            y1_t = y_t - dh
+            y2_t = y_t + dh
 
         if ~(x1_t > x2_a or x1_a > x2_t or y1_t > y2_a or y1_a > y2_t): # if anchor and ground truth box intersect
             # calculate coordinates of intersection rectangle

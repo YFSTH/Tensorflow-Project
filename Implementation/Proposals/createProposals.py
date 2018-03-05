@@ -24,6 +24,7 @@ def createProposals(predicted_coordinates, selection_tensor):
                         # if the proposal´s center pixel is outside the image frame deem the proposal to be invalid
                         proposal_on_fm_tensor[0, x, y, t + (np.arange(0, 4) * 9)] = -9
                         proposal_on_img_tensor[0, x, y, t + (np.arange(0, 4) * 9)] = -9
+                        selection_tensor[0, x, y, t, 0] = -9
                     else:
                         # proposal (x,y) indicates lower-left edge of proposal
                         prop_x = pred_x - (np.ceil(pred_w / 2) - 1)
@@ -80,7 +81,7 @@ def createProposals(predicted_coordinates, selection_tensor):
                         proposal_on_fm_tensor[0, x, y, t + 18] = np.ceil(prop_w / 16)
                         proposal_on_fm_tensor[0, x, y, t + 27] = np.ceil(prop_h / 16)
 
-    return proposal_on_img_tensor, proposal_on_fm_tensor
+    return proposal_on_img_tensor, proposal_on_fm_tensor, selection_tensor
 
 
 # with open('dump.pkl', 'rb') as file:
