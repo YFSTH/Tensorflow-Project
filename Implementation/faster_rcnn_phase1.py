@@ -2,6 +2,7 @@
 
 # Import packages
 import datetime
+from functools import partial
 import os
 import pdb
 import pickle
@@ -10,14 +11,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-from anchors.create_anchors_tensor import *
-from anchors.anchors_evaluation import *
+from anchors.create_anchors_tensor import create_anchors_tensor
+from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
-from data_generation.data_generator import *
-from functools import partial
+from data_generation.data_generator import create_collages
 from network.layers import convolutional, fully_connected, roi_pooling
 from proposals.createProposals import createProposals
-from proposals.selectProposals import *
+from proposals.selectProposals import selectProposals
 from vgg16.vgg16_nontrainsavable import VGG16
 
 
@@ -53,30 +53,26 @@ LOWER_THRESHOLD = 0.30
 UPPER_THRESHOLD = 0.70
 NUM_SELECTED_ANCHORS = 256
 
-# VGG16
-CKPT_PATH = './checkpoints/'
-STORE_VGG = True
-RESTORE_VGG = False
-VGG16_PATH = None if ~RESTORE_VGG else './checkpoints/vgg16.npy'
-
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 10
+EPOCHS_TRAINSTEP_1 = 5
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
+CKPT_PATH = './checkpoints/'
 STORE_RPN = True
 RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
+FINALLY_VALIDATE = True
 
 # Fast R-CNN
 ROI_FM_SIZE = 8
 EPOCHS_TRAINSTEP_2 = 1
+LR_FAST = 0.001
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
-FINALLY_VALIDATE = True
 
 
 # Generate images xor load them if they already exist with the desired properties
@@ -289,10 +285,12 @@ with tf.variable_scope('rpn'):
 
 with tf.variable_scope('fast_rcnn'):
 
-    inputs = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
+    rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
+    classes = tf.placeholder(tf.int32, [BATCH_SIZE])
+    boxes = tf.placeholder(tf.int32, [BATCH_SIZE, 4])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(inputs, [-1, np.prod(inputs.shape[1:])]), 4096, False, tf.nn.relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 4096, False, tf.nn.relu)
 
     with tf.variable_scope('layer_7'):
         fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
@@ -306,14 +304,10 @@ with tf.variable_scope('fast_rcnn'):
 
     with tf.variable_scope('cls_prob'):
         cls_prob = fully_connected(cls_score, 10, False, None)
-        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(Y[:, 0, 0], tf.int64), logits=cls_prob))
+        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_prob))
 
+    cls_train = tf.train.AdamOptimizer(LR_FAST).minimize(cls_loss)
 
-### Model saving nodes
-
-with tf.name_scope('model_savers'):
-    rpn_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
-    fast_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
 ### Model initialization nodes
 
@@ -322,36 +316,41 @@ with tf.name_scope('model_initializers'):
     fast_init = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
 
 
+### Model saving nodes
+
+with tf.name_scope('model_savers'):
+    rpn_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rpn'))
+    fast_saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='fast_rcnn'))
+
+
 ### Execution Phase ###################################################################################################
 
 if __name__ == "__main__":
 
-    # Load pretrained VGG16 and get handle on input placeholder
+    # Load pre-trained VGG16 and get handle on input placeholder
     images = tf.placeholder(tf.float32, [BATCH_SIZE, IMG_SIZE, IMG_SIZE, 3])
     vgg16 = VGG16()
     vgg16.build(images)
 
+    logits_ = []
     train_proposals_img = []
     train_proposals_fm = []
     valid_proposals_img = []
     valid_proposals_fm = []
-    logits_ = []
 
     with tf.Session() as sess:
 
-        # Initialize xor restore the required sub-models
-        #restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
-        #restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
-        #restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
-
         sess.run(tf.global_variables_initializer())
+
+        # Initialize xor restore the required sub-models
+        restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
+        restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+        restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
         feature_maps = []
-        proposals = []
         train_step = 0
-
 
         xt = None
         yt = None
@@ -361,7 +360,6 @@ if __name__ == "__main__":
         reg_loss_list = []
         cls_loss_list = []
         oal_loss_list = []
-
 
         for epoch in range(EPOCHS_TRAINSTEP_1):
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
@@ -388,21 +386,17 @@ if __name__ == "__main__":
                     tslt.append(train_selection_tensor[first])
                     gtt.append(train_ground_truth_tensor[first])
 
-                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt[-1])
-                    train_proposals_img.append(proposal_img)
-                    train_proposals_fm.append(proposal_fm)
+                    if epoch + 1 == EPOCHS_TRAINSTEP_1:
+                        proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt[-1])
+                        train_proposals_img.append(proposal_img)
+                        train_proposals_fm.append(proposal_fm)
+                        feature_maps.append(vgg16_conv5_3_relu)
 
                     logits_.append(logits__)
-
-                    #if epoch + 1 == EPOCHS_TRAINSTEP_1:
-                    #    feature_maps.append(fm)
-                    #    proposals.append(rp)
 
                     if train_step % 9 == 0:
                         print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
                     train_step += 1
-
-
 
         with open('proposal_debugging.pkl', 'wb') as file:
             pickle.dump([logits_, train_proposals_img, gtt, tslt], file)
@@ -410,15 +404,40 @@ if __name__ == "__main__":
         with open('dump.pkl', 'wb') as file:
             pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
-            # select proposals according to IoU with mnist image and cls score
-
-
-
+        # select proposals according to IoU with mnist image and cls score
         proposal_selection_tensor = selectProposals(iou_threshold=0.15, n_highest_cls_scores=200, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
         #pdb.set_trace()
+
+        for epoch in range(EPOCHS_TRAINSTEP_2):
+            for n, image in enumerate(feature_maps):
+                for i, j, k in np.ndindex(16, 16, 9):
+                    if train_selection_tensor[n][:, i, j, k, 0] == 1:
+
+                        bounding_box = np.zeros(4, dtype=np.int32)
+                        bounding_box[0] = train_proposals_fm[n][:, i, j, k]
+                        bounding_box[1] = train_proposals_fm[n][:, i, j, 9+k]
+                        bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
+                        bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
+
+                        #print(bounding_box)
+
+                        pool5 = roi_pooling(image, bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+
+                        gt_bounding_box = np.zeros((BATCH_SIZE, 4), dtype=np.int32)
+                        gt_bounding_box[:, 0] = train_proposals_img[n][:, i, j, k]
+                        gt_bounding_box[:, 1] = train_proposals_img[n][:, i, j, 9 + k]
+                        gt_bounding_box[:, 2] = train_proposals_img[n][:, i, j, 18 + k]
+                        gt_bounding_box[:, 3] = train_proposals_img[n][:, i, j, 27 + k]
+
+                        gt_class = train_selection_tensor[n][:, i, j, k, 1]
+
+                        _, loss = sess.run([cls_train, cls_loss], feed_dict={rois: pool5,
+                                                                             classes: gt_class,
+                                                                             boxes: gt_bounding_box})
+                        #print(loss)
 
         # Validation ##################################################################################################
         vxt = None
@@ -488,19 +507,6 @@ if __name__ == "__main__":
                         #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
                         #print(out.shape)
 
-
-
-
-
-
-
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
-        #if STORE_VGG:
-        #    vgg16.save_npy(sess, CKPT_PATH + 'vgg16.npy')
-
-
-
-
-

@@ -76,8 +76,8 @@ def createProposals(predicted_coordinates, selection_tensor):
 
                         # assign the proposal´s parameters with respect to the RPNs and Fast R-CNNs input feature
                         # map to the respective entries of the proposal
-                        proposal_on_fm_tensor[0, x, y, t] = np.ceil(prop_x / 16)
-                        proposal_on_fm_tensor[0, x, y, t + 9] = np.ceil(prop_y / 16)
+                        proposal_on_fm_tensor[0, x, y, t] = np.floor(prop_x / 16)
+                        proposal_on_fm_tensor[0, x, y, t + 9] = np.floor(prop_y / 16)
                         proposal_on_fm_tensor[0, x, y, t + 18] = np.ceil(prop_w / 16)
                         proposal_on_fm_tensor[0, x, y, t + 27] = np.ceil(prop_h / 16)
 
