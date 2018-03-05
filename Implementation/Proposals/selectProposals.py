@@ -93,7 +93,6 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
     print('ende first step\n\n')
     logits = np.array(logits)
     # shape (700, 1, 16, 16, 18)
-    pdb.set_trace()
 
     # calculate the predicted probability that the proposal catches an object
     probabilities = np.zeros((num_collages, 16, 16, 9)) - 1
