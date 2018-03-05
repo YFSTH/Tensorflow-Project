@@ -86,7 +86,6 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
                                 proposal_selection_tensor[c, x, y, t, 0] = 1
                             # the proposal tensor will contain: (collage#, x_fm, y_fm, anchor#, [type, mnist_image {only during train phase}, iou {only during train phase}])
 
-    print('ende first step\n\n')
     logits = np.array(logits)
     # shape (700, 1, 16, 16, 18)
 
