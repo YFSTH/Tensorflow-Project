@@ -379,7 +379,7 @@ if __name__ == "__main__":
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={inputs: X_batch})
 
                     _, rp, logits, lr, lc, ol = sess.run(
-                        [rpn_train_op, predicted_coordinates, logits_filtered rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
+                        [rpn_train_op, predicted_coordinates, logits_filtered, rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
                                    anchor_coordinates: anchors[first],
@@ -396,7 +396,7 @@ if __name__ == "__main__":
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
 
-                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt, logits)
+                    proposal_img, proposal_fm, train_selection_tensor[first] = createProposals(tpreds, tslt)
                     train_proposals_img.append(proposal_img)
                     train_proposals_fm.append(proposal_fm)
                     #if epoch + 1 == EPOCHS_TRAINSTEP_1:

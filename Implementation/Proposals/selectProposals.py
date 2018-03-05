@@ -52,7 +52,10 @@ def calculate_iou(proposal, ground_truth_box):
     else:
         return 0
 
-def selectProposals(logits, proposal_tensor, ground_truth_tensor, selection_tensor):
+def selectProposals(iou_threshold, highest_n_cls_scores, logits, proposal_tensor, ground_truth_tensor, selection_tensor):
 
-    # TODO: IN SELECTION TENSOR DER SUPERMETHODE ABSPECIHERN; WENN PROPOSAL ENTWEDER -9 IN CREATEPROPOSAL ODER
+    # reject proposals which have an IoU < iou_threshold with ground truth box
 
+    # if multiple proposals
+
+    # TODO: muss alles nach allen trainingsepochen geschehen
