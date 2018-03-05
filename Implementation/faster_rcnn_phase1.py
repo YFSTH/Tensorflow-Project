@@ -16,8 +16,8 @@ from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
 from data_generation.data_generator import create_collages
 from network.layers import convolutional, fully_connected, roi_pooling
-from Proposals.createProposals import createProposals
-from Proposals.selectProposals import selectProposals
+from proposals.createProposals import createProposals
+from proposals.selectProposals import selectProposals
 from vgg16.vgg16_nontrainsavable import VGG16
 
 
