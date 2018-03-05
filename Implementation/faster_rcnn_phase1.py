@@ -16,8 +16,8 @@ from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
 from data_generation.data_generator import create_collages
 from network.layers import convolutional, fully_connected, roi_pooling
-from proposals.createProposals import createProposals
-from proposals.selectProposals import selectProposals
+from Proposals.createProposals import createProposals
+from Proposals.selectProposals import selectProposals
 from vgg16.vgg16_nontrainsavable import VGG16
 
 
@@ -31,8 +31,8 @@ MAX_NUM_IMGS = 5
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 2  # original MNIST images size is 28x28
-MAX_SCALING = 2
+MIN_SCALING = 3  # original MNIST images size is 28x28
+MAX_SCALING = 3
 SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
 CLOCKWISE_ANGLE = 0
@@ -45,7 +45,7 @@ BATCH_SIZE = 1
 IMG_SIZE = 256
 VGG_FM_SIZE = 16
 VGG_FM_NUM = 512
-ANCHORS_SCALES = [56, 56, 56]
+ANCHORS_SCALES = [84, 84, 84]
 ANCHORS_RATIOS = [1, 1, 1]
 NUM_ANCHORS = 9
 LOAD_LAST_ANCHORS = True
@@ -55,11 +55,8 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-<<<<<<< HEAD
 EPOCHS_TRAINSTEP_1 = 1
-=======
-EPOCHS_TRAINSTEP_1 = 5
->>>>>>> 58841103781972cb3b5494f35d5534c43a58f76c
+
 LR_RPN = 0.001
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
@@ -415,6 +412,10 @@ if __name__ == "__main__":
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
+
+        pdb.set_trace()
+
+
 
         for epoch in range(EPOCHS_TRAINSTEP_2):
             for n, image in enumerate(feature_maps):

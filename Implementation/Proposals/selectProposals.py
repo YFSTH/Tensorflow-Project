@@ -109,8 +109,6 @@ def selectProposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_te
     # select n best proposals using the cls score amongst proposals over all collages
     selection_array = np.squeeze(np.array(selection_tensor))
 
-    # (700, 1, 16, 16, 9, 3)
-
     # get indices of positive anchors
 
     idxs_of_pos_anchors = np.where(selection_array[:, :, :, :, 0] == 1)
