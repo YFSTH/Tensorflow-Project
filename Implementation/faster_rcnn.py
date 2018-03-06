@@ -2,12 +2,14 @@
 
 # Import packages
 import datetime
-from functools import partial
 import os
 import pickle
+from functools import partial
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+
 from anchors.create_anchors_tensor import create_anchors_tensor
 from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
@@ -54,8 +56,6 @@ NUM_SELECTED_ANCHORS = 256
 REG_TO_CLS_LOSS_RATIO = 10
 EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
-RP_PATH = 'proposals.pkl'
-FM_PATH = 'feature_maps.pkl'
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
 RESTORE_RPN = False
@@ -65,7 +65,7 @@ FINALLY_VALIDATE = True
 # Fast R-CNN
 ROI_FM_SIZE = 8
 EPOCHS_TRAINSTEP_2 = 5
-LR_FAST = 0.001
+LR_FAST = 0.01
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
@@ -290,7 +290,9 @@ with tf.variable_scope('fast_rcnn'):
         fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.relu)
 
     #with tf.variable_scope('layer_7'):
-     #   fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+
+    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+
 
     with tf.variable_scope('bbox_pred'):
         bbox_pred = fully_connected(fc6, 40, False, tf.nn.relu)
@@ -303,7 +305,7 @@ with tf.variable_scope('fast_rcnn'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
         cls_loss = tf.nn.softmax(cls_score)
 
-    fast_loss = tf.reduce_sum(cls_loss + bbox_loss)
+    fast_loss = tf.reduce_sum(cls_loss + bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
     fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
 
@@ -345,7 +347,7 @@ if __name__ == "__main__":
         restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
 
-        #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
         feature_maps = []
         train_step = 0
@@ -439,11 +441,12 @@ if __name__ == "__main__":
 
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
-                                                                               classes: gt_class,
-                                                                               boxes: gt_bounding_box})
-                        loss_history.append(loss)
-                print("Processed feature maps: " + str(n))
+                        _, floss, closs, rloss = sess.run(
+                            [fast_train, fast_loss, cls_loss, bbox_loss],
+                            feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
+                        )
+                        loss_history.append([floss, closs, rloss])
+                print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
             pickle.dump(loss_history, file)
@@ -496,29 +499,7 @@ if __name__ == "__main__":
         with open('valid_proposals.pkl', 'wb') as file:
             pickle.dump([valid_proposals_img, valid_proposals_fm], file)
 
-        #with open(RP_PATH, 'wb') as file:
-        #    pickle.dump(proposals, file)
-        #with open(FM_PATH, 'wb') as file:
-        #    pickle.dump(feature_maps, file)
-
-        #for epoch in range(EPOCHS_TRAINSTEP_2):
-        #    for n, image in enumerate(feature_maps):
-        #        for i, j, k in np.ndindex(16, 16, 9):
-        #            if train_selection_tensor[n][:, i, j, k, 0] == 1:
-        #                bbox = np.zeros(4)
-        #                bbox[0] = proposals[n][:, i, j, k]
-        #                bbox[1] = proposals[n][:, i, j, 9 + k]
-        #                bbox[2] = proposals[n][:, i, j, 18 + k]
-        #                bbox[3] = proposals[n][:, i, j, 27 + k]
-        #
-        #                pool5 = roi_pooling(image, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
-        #                print(pool5.shape)
-
-                        #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
-                        #print(out.shape)
-
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
         """
-
