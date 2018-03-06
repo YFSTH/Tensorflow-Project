@@ -140,7 +140,9 @@ def select_proposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_t
     updated_proposal_sel_tensor[:, :, :, :, 1] = proposal_selection_tensor[:, :, :, :, 1]
     updated_proposal_sel_tensor[:, :, :, :, 2] = proposal_selection_tensor[:, :, :, :, 2]
     # for all selected proposals
-    for i in range(max_n_highest_cls_scores):
+    # if there are not enough proposals index range must be pruned
+    num_idxs_to_select = min(choosen_idxs.shape[1], max_n_highest_cls_scores)
+    for i in range(num_idxs_to_select):
         # build the index
         choosen_idx = choosen_idxs[:, i]
         idx_in_proposal_sel_tensor = tuple(choosen_idx) + (0,)

@@ -376,7 +376,6 @@ if __name__ == "__main__":
                     xt = X_batch
                     yt = Y_batch
                     tpreds = rp
-                    logits_.append(logits_)
                     reg_loss_list.append(lr)
                     cls_loss_list.append(lc)
                     oal_loss_list.append(ol)
@@ -403,7 +402,8 @@ if __name__ == "__main__":
 
         # select proposals according to IoU with mnist image and cls score
 
-        proposal_selection_tensor = select_proposals(iou_threshold=0.15, max_n_highest_cls_scores=380000, logits=logits_,
+        print('select proposals')
+        proposal_selection_tensor = select_proposals(iou_threshold=0.15, max_n_highest_cls_scores=9999, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
