@@ -143,5 +143,3 @@ class Anchor(object):
         else:
             # if no box was assigned to the anchor
             self.type = 'negative'
-
-

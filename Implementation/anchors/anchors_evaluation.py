@@ -98,7 +98,3 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
         with open('anchors/'+filename+'.pkl', 'rb') as file:
             ground_truth_tensors, selection_tensors = pickle.load(file)
     return np.array(ground_truth_tensors), np.array(selection_tensors)
-
-
-
-

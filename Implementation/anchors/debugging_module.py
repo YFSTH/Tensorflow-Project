@@ -42,8 +42,3 @@ def debugging_module(batch_anchor_tensor, collage, label, gtt, slt, anchor_objec
     print(label)
 
     pdb.set_trace()
-
-
-
-
-

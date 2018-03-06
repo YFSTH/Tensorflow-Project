@@ -71,4 +71,3 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
             # and and mark the anchor as deactivated in the respective entry of the selection tensor
             selection_tensor[a, x, y, 0] = -3
     return selection_tensor
-
