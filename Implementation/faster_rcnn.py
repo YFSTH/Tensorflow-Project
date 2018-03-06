@@ -21,7 +21,7 @@ from vgg16.vgg16 import VGG16
 # Set class variables
 
 # Image generation
-NUM_COLLAGES = 15
+NUM_COLLAGES = 150
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 4
@@ -52,7 +52,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -250,6 +250,10 @@ with tf.variable_scope('rpn'):
                 targets_filtered = tf.concat(
                     [tf.multiply(tmp4, tf.cast(idxi, tf.float32)), tf.multiply(tmp4, tf.cast(idx, tf.float32))], axis=1)
 
+                # calculate the accuracy
+                predictions = tf.round(tf.nn.softmax(logits_filtered, axis=1))
+                accuracy = tf.reduce_mean(tf.cast(tf.equal(predictions, targets_filtered), tf.float32))
+
                 # calculate the cross entropy loss
                 rpn_cls_loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
                 rpn_cls_loss_normalized = tf.truediv(rpn_cls_loss, tf.cast(NUM_SELECTED_ANCHORS, tf.float32))
@@ -278,25 +282,25 @@ with tf.variable_scope('rpn'):
 
 with tf.variable_scope('fast_rcnn'):
 
-    rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
+    rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM/2])
     classes = tf.placeholder(tf.int32, [BATCH_SIZE])
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 4096, False, tf.nn.relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.relu)
 
-    with tf.variable_scope('layer_7'):
-        fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+    #with tf.variable_scope('layer_7'):
+     #   fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
 
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
+        bbox_pred = fully_connected(fc6, 40, False, tf.nn.relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
         bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
 
     with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+        cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
         cls_loss = tf.nn.softmax(cls_score)
 
     fast_loss = tf.reduce_sum(cls_loss + bbox_loss)
@@ -362,9 +366,8 @@ if __name__ == "__main__":
                     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
                     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch})
 
-
-                    _, rp, logits__, lr, lc, ol = sess.run(
-                        [rpn_train_op, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized,
+                    _, accu, rp, logits__, lr, lc, ol = sess.run(
+                        [rpn_train_op, accuracy, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized,
                          rpn_cls_loss_normalized, overall_loss],
                         feed_dict={X: vgg16_conv5_3_relu,
                                    Y: Y_batch,
@@ -391,7 +394,7 @@ if __name__ == "__main__":
                     logits_.append(logits__)
 
                     if train_step % 9 == 0:
-                        print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol)
+                        print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'accuracy:', np.round(accu, 2))
                     train_step += 1
 
         with open('proposal_debugging.pkl', 'wb') as file:
@@ -426,7 +429,7 @@ if __name__ == "__main__":
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
-                        pool5 = roi_pooling(image[:, :, :, :], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+                        pool5 = roi_pooling(image[:, :, :, 256:512], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
                         gt_bounding_box = np.zeros((BATCH_SIZE, 40))
                         gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
