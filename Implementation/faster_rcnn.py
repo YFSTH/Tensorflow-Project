@@ -2,12 +2,14 @@
 
 # Import packages
 import datetime
-from functools import partial
 import os
 import pickle
+from functools import partial
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+
 from anchors.create_anchors_tensor import create_anchors_tensor
 from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
@@ -21,7 +23,7 @@ from vgg16.vgg16 import VGG16
 # Set class variables
 
 # Image generation
-NUM_COLLAGES = 15
+NUM_COLLAGES = 150
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 4
@@ -52,10 +54,8 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
-RP_PATH = 'proposals.pkl'
-FM_PATH = 'feature_maps.pkl'
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
 RESTORE_RPN = False
@@ -278,25 +278,25 @@ with tf.variable_scope('rpn'):
 
 with tf.variable_scope('fast_rcnn'):
 
-    rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM])
+    rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM/2])
     classes = tf.placeholder(tf.int32, [BATCH_SIZE])
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 4096, False, tf.nn.relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.relu)
 
-    with tf.variable_scope('layer_7'):
-        fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+    #with tf.variable_scope('layer_7'):
+    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
 
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc7, 40, False, tf.nn.relu)
+        bbox_pred = fully_connected(fc6, 40, False, tf.nn.relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
         bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
 
     with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc7, 10, False, tf.nn.relu)
+        cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
         cls_loss = tf.nn.softmax(cls_score)
 
     fast_loss = tf.reduce_sum(cls_loss + bbox_loss)
@@ -426,7 +426,7 @@ if __name__ == "__main__":
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
-                        pool5 = roi_pooling(image[:, :, :, :], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+                        pool5 = roi_pooling(image[:, :, :, 256:512], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
                         gt_bounding_box = np.zeros((BATCH_SIZE, 40))
                         gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
@@ -440,7 +440,7 @@ if __name__ == "__main__":
                                                                                classes: gt_class,
                                                                                boxes: gt_bounding_box})
                         loss_history.append(loss)
-                print("Processed feature maps: " + str(n))
+                print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
             pickle.dump(loss_history, file)
@@ -493,29 +493,7 @@ if __name__ == "__main__":
         with open('valid_proposals.pkl', 'wb') as file:
             pickle.dump([valid_proposals_img, valid_proposals_fm], file)
 
-        #with open(RP_PATH, 'wb') as file:
-        #    pickle.dump(proposals, file)
-        #with open(FM_PATH, 'wb') as file:
-        #    pickle.dump(feature_maps, file)
-
-        #for epoch in range(EPOCHS_TRAINSTEP_2):
-        #    for n, image in enumerate(feature_maps):
-        #        for i, j, k in np.ndindex(16, 16, 9):
-        #            if train_selection_tensor[n][:, i, j, k, 0] == 1:
-        #                bbox = np.zeros(4)
-        #                bbox[0] = proposals[n][:, i, j, k]
-        #                bbox[1] = proposals[n][:, i, j, 9 + k]
-        #                bbox[2] = proposals[n][:, i, j, 18 + k]
-        #                bbox[3] = proposals[n][:, i, j, 27 + k]
-        #
-        #                pool5 = roi_pooling(image, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
-        #                print(pool5.shape)
-
-                        #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
-                        #print(out.shape)
-
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
         """
-
