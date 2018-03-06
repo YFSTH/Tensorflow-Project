@@ -16,8 +16,8 @@ from anchors.anchors_evaluation import anchors_evaluation
 from data_generation.batch_generator import MNISTCollage
 from data_generation.data_generator import create_collages
 from network.layers import convolutional, fully_connected, roi_pooling
-from Proposals.createProposals import createProposals
-from Proposals.selectProposals import selectProposals
+from proposals.createProposals import createProposals
+from proposals.selectProposals import selectProposals
 from vgg16.vgg16_nontrainsavable import VGG16
 
 
@@ -55,7 +55,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -66,8 +66,8 @@ RPN_PATH = './checkpoints/rpn.ckpt'
 FINALLY_VALIDATE = True
 
 # Fast R-CNN
-ROI_FM_SIZE = 12
-EPOCHS_TRAINSTEP_2 = 1
+ROI_FM_SIZE = 8
+EPOCHS_TRAINSTEP_2 = 5
 LR_FAST = 0.001
 STORE_FAST = True
 RESTORE_FAST = False
@@ -406,15 +406,13 @@ if __name__ == "__main__":
         with open('dump.pkl', 'wb') as file:
             pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
-
         # select proposals according to IoU with mnist image and cls score
-        proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=380000, logits=logits_,
-                                                    proposal_tensor=train_proposals_img,
-                                                    ground_truth_tensor=train_ground_truth_tensor,
-                                                    selection_tensor=train_selection_tensor, training=True)
+        #proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=380000, logits=logits_,
+        #                                            proposal_tensor=train_proposals_img,
+        #                                            ground_truth_tensor=train_ground_truth_tensor,
+        #                                            selection_tensor=train_selection_tensor, training=True)
 
-
-
+        loss_history = []
 
         for epoch in range(EPOCHS_TRAINSTEP_2):
             for n, image in enumerate(feature_maps):
@@ -427,7 +425,7 @@ if __name__ == "__main__":
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
-                        pool5 = roi_pooling(image, bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+                        pool5 = roi_pooling(image[:, :, :, :], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
                         gt_bounding_box = np.zeros((BATCH_SIZE, 40))
                         gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
@@ -440,8 +438,13 @@ if __name__ == "__main__":
                         _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
                                                                                classes: gt_class,
                                                                                boxes: gt_bounding_box})
-                        print(loss)
+                        loss_history.append(loss)
+                print("Processed feature maps: " + str(n))
 
+        with open('fast_loss_history.pkl', 'wb') as file:
+            pickle.dump(loss_history, file)
+
+        """
         # Validation ##################################################################################################
         vxt = None
         vyt = None
@@ -513,3 +516,4 @@ if __name__ == "__main__":
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
+        """
