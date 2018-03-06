@@ -78,10 +78,6 @@
                         proposal_on_img_tensor[0, x, y, t + 27] = prop_h
                         # assign the proposal´s parameters with respect to the RPNs and Fast R-CNNs input feature
                         # map to the respective entries of the proposal
-
-                        if np.ceil(prop_w / 16) == 0 or np.ceil(prop_h / 16) == 0:
-                            import pdb;pdb.set_trace()
-
                         proposal_on_fm_tensor[0, x, y, t] = np.floor(prop_x / 16)
                         proposal_on_fm_tensor[0, x, y, t + 9] = np.floor(prop_y / 16)
                         proposal_on_fm_tensor[0, x, y, t + 18] = np.ceil(prop_w / 16)
