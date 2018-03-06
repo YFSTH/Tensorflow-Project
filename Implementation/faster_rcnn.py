@@ -287,22 +287,20 @@ with tf.variable_scope('fast_rcnn'):
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.leaky_relu)
 
     #with tf.variable_scope('layer_7'):
-
-    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
-
+    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.leaky_relu)
 
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc6, 40, False, tf.nn.relu)
+        bbox_pred = fully_connected(fc6, 40, False, tf.nn.leaky_relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
         bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
 
     with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
+        cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
         cls_loss = tf.nn.softmax(cls_score)
 
     fast_loss = tf.reduce_sum(cls_loss + bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
