@@ -24,7 +24,7 @@ from vgg16.vgg16_nontrainsavable import VGG16
 # Set class variables
 
 # Image generation
-NUM_COLLAGES = 1500
+NUM_COLLAGES = 15
 COLLAGE_SIZE = 256
 MIN_NUM_IMGS = 2
 MAX_NUM_IMGS = 4
@@ -55,7 +55,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 10
+EPOCHS_TRAINSTEP_1 = 1
 RPN_ACTFUN = tf.nn.elu
 RP_PATH = 'proposals.pkl'
 FM_PATH = 'feature_maps.pkl'
@@ -66,8 +66,8 @@ RPN_PATH = './checkpoints/rpn.ckpt'
 FINALLY_VALIDATE = True
 
 # Fast R-CNN
-ROI_FM_SIZE = 12
-EPOCHS_TRAINSTEP_2 = 1
+ROI_FM_SIZE = 8
+EPOCHS_TRAINSTEP_2 = 5
 LR_FAST = 0.001
 STORE_FAST = True
 RESTORE_FAST = False
@@ -406,8 +406,8 @@ if __name__ == "__main__":
         with open('dump.pkl', 'wb') as file:
             pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
-
         # select proposals according to IoU with mnist image and cls score
+
         proposal_selection_tensor = selectProposals(iou_threshold=0.15, max_n_highest_cls_scores=380000, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
@@ -416,103 +416,109 @@ if __name__ == "__main__":
         with open('proposal_selection_tensor.pkl', 'wb') as file:
             pickle.dump([proposal_selection_tensor], file)
 
+        loss_history = []
 
+        for epoch in range(EPOCHS_TRAINSTEP_2):
+            for n, image in enumerate(feature_maps):
+                for i, j, k in np.ndindex(16, 16, 9):
+                    if train_selection_tensor[n][:, i, j, k, 0] == 1:
 
+                        bounding_box = np.zeros(4, dtype=np.int32)
+                        bounding_box[0] = train_proposals_fm[n][:, i, j, k]
+                        bounding_box[1] = train_proposals_fm[n][:, i, j, 9+k]
+                        bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
+                        bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
-        # for epoch in range(EPOCHS_TRAINSTEP_2):
-        #     for n, image in enumerate(feature_maps):
-        #         for i, j, k in np.ndindex(16, 16, 9):
-        #             if train_selection_tensor[n][:, i, j, k, 0] == 1:
+                        pool5 = roi_pooling(image[:, :, :, :], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
+
+                        gt_bounding_box = np.zeros((BATCH_SIZE, 40))
+                        gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
+                        gt_bounding_box[:, 10:19] = train_proposals_img[n][:, i, j, 9 + k]
+                        gt_bounding_box[:, 20:29] = train_proposals_img[n][:, i, j, 18 + k]
+                        gt_bounding_box[:, 30:39] = train_proposals_img[n][:, i, j, 27 + k]
+
+                        gt_class = train_selection_tensor[n][:, i, j, k, 1]
+
+                        _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
+                                                                               classes: gt_class,
+                                                                               boxes: gt_bounding_box})
+                        loss_history.append(loss)
+                print("Processed feature maps: " + str(n))
+
+        with open('fast_loss_history.pkl', 'wb') as file:
+            pickle.dump(loss_history, file)
+
+        """
+        # Validation ##################################################################################################
+        vxt = None
+        vyt = None
+        vpreds = None
+        vslt = None
+        vgtt = None
+        vreg_loss_list = []
+        vcls_loss_list = []
+        voal_loss_list = []
+
+        for f in range(len(batcher.valid_data)):
+            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+
+            X_batch = batcher.valid_data[f]
+            Y_batch = batcher.valid_labels[f]
+
+            vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch.reshape((1, 256, 256, 3))})
+
+            vlr, vlc, vol, pres, clss = sess.run(
+                [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
+                 predicted_coordinates, clshead_conv1],
+                feed_dict={X: vgg16_conv5_3_relu,
+                           Y: np.array(Y_batch).reshape((1, MAX_NUM_IMGS, 7)),
+                           anchor_coordinates: anchors[f],
+                           groundtruth_coordinates: valid_ground_truth_tensor[f],
+                           selection_tensor: valid_selection_tensor[f]})
+
+            vxt = X_batch
+            vyt = Y_batch
+            vpreds = pres
+            vslt = valid_selection_tensor[f]
+            vgtt = valid_ground_truth_tensor[f]
+            vreg_loss_list.append(vlr)
+            vcls_loss_list.append(vlc)
+            voal_loss_list.append(vol)
+
+            proposal_img, proposal_fm, valid_selection_tensor[f] = createProposals(vpreds, vslt)
+            valid_proposals_img.append(proposal_img)
+            valid_proposals_fm.append(proposal_fm)
+
+        with open('vdump.pkl', 'wb') as file:
+            pickle.dump([vxt, vyt, vpreds, vslt, vgtt, vreg_loss_list, vcls_loss_list, voal_loss_list],
+                        file)
+
+        with open('valid_proposals.pkl', 'wb') as file:
+            pickle.dump([valid_proposals_img, valid_proposals_fm], file)
+
+        #with open(RP_PATH, 'wb') as file:
+        #    pickle.dump(proposals, file)
+        #with open(FM_PATH, 'wb') as file:
+        #    pickle.dump(feature_maps, file)
+
+        #for epoch in range(EPOCHS_TRAINSTEP_2):
+        #    for n, image in enumerate(feature_maps):
+        #        for i, j, k in np.ndindex(16, 16, 9):
+        #            if train_selection_tensor[n][:, i, j, k, 0] == 1:
+        #                bbox = np.zeros(4)
+        #                bbox[0] = proposals[n][:, i, j, k]
+        #                bbox[1] = proposals[n][:, i, j, 9 + k]
+        #                bbox[2] = proposals[n][:, i, j, 18 + k]
+        #                bbox[3] = proposals[n][:, i, j, 27 + k]
         #
-        #                 bounding_box = np.zeros(4, dtype=np.int32)
-        #                 bounding_box[0] = train_proposals_fm[n][:, i, j, k]
-        #                 bounding_box[1] = train_proposals_fm[n][:, i, j, 9+k]
-        #                 bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
-        #                 bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
-        #
-        #                 pool5 = roi_pooling(image, bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
-        #
-        #                 gt_bounding_box = np.zeros((BATCH_SIZE, 40))
-        #                 gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
-        #                 gt_bounding_box[:, 10:19] = train_proposals_img[n][:, i, j, 9 + k]
-        #                 gt_bounding_box[:, 20:29] = train_proposals_img[n][:, i, j, 18 + k]
-        #                 gt_bounding_box[:, 30:39] = train_proposals_img[n][:, i, j, 27 + k]
-        #
-        #                 gt_class = train_selection_tensor[n][:, i, j, k, 1]
-        #
-        #                 _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
-        #                                                                        classes: gt_class,
-        #                                                                        boxes: gt_bounding_box})
-        #                 print(loss)
-        #
-        # # Validation ##################################################################################################
-        # vxt = None
-        # vyt = None
-        # vpreds = None
-        # vslt = None
-        # vgtt = None
-        # vreg_loss_list = []
-        # vcls_loss_list = []
-        # voal_loss_list = []
-        #
-        # for f in range(len(batcher.valid_data)):
-        #     result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-        #
-        #     X_batch = batcher.valid_data[f]
-        #     Y_batch = batcher.valid_labels[f]
-        #
-        #     vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch.reshape((1, 256, 256, 3))})
-        #
-        #     vlr, vlc, vol, pres, clss = sess.run(
-        #         [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-        #          predicted_coordinates, clshead_conv1],
-        #         feed_dict={X: vgg16_conv5_3_relu,
-        #                    Y: np.array(Y_batch).reshape((1, MAX_NUM_IMGS, 7)),
-        #                    anchor_coordinates: anchors[f],
-        #                    groundtruth_coordinates: valid_ground_truth_tensor[f],
-        #                    selection_tensor: valid_selection_tensor[f]})
-        #
-        #     vxt = X_batch
-        #     vyt = Y_batch
-        #     vpreds = pres
-        #     vslt = valid_selection_tensor[f]
-        #     vgtt = valid_ground_truth_tensor[f]
-        #     vreg_loss_list.append(vlr)
-        #     vcls_loss_list.append(vlc)
-        #     voal_loss_list.append(vol)
-        #
-        #     proposal_img, proposal_fm, valid_selection_tensor[f] = createProposals(vpreds, vslt)
-        #     valid_proposals_img.append(proposal_img)
-        #     valid_proposals_fm.append(proposal_fm)
-        #
-        # with open('vdump.pkl', 'wb') as file:
-        #     pickle.dump([vxt, vyt, vpreds, vslt, vgtt, vreg_loss_list, vcls_loss_list, voal_loss_list],
-        #                 file)
-        #
-        # with open('valid_proposals.pkl', 'wb') as file:
-        #     pickle.dump([valid_proposals_img, valid_proposals_fm], file)
-        #
-        # #with open(RP_PATH, 'wb') as file:
-        # #    pickle.dump(proposals, file)
-        # #with open(FM_PATH, 'wb') as file:
-        # #    pickle.dump(feature_maps, file)
-        #
-        # #for epoch in range(EPOCHS_TRAINSTEP_2):
-        # #    for n, image in enumerate(feature_maps):
-        # #        for i, j, k in np.ndindex(16, 16, 9):
-        # #            if train_selection_tensor[n][:, i, j, k, 0] == 1:
-        # #                bbox = np.zeros(4)
-        # #                bbox[0] = proposals[n][:, i, j, k]
-        # #                bbox[1] = proposals[n][:, i, j, 9 + k]
-        # #                bbox[2] = proposals[n][:, i, j, 18 + k]
-        # #                bbox[3] = proposals[n][:, i, j, 27 + k]
-        # #
-        # #                pool5 = roi_pooling(image, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
-        # #                print(pool5.shape)
-        #
-        #                 #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
-        #                 #print(out.shape)
-        #
-        # storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
-        # storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
-        # storer(STORE_FAST, fast_saver, 'fast.ckpt')
+        #                pool5 = roi_pooling(image, bbox, [ROI_FM_SIZE, ROI_FM_SIZE])
+        #                print(pool5.shape)
+
+                        #out = sess.run(pool5, feed_dict={X: X_batch, bbox: proposal})
+                        #print(out.shape)
+
+        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        storer(STORE_FAST, fast_saver, 'fast.ckpt')
+        """
+
