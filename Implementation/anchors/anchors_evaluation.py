@@ -18,7 +18,7 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
     '''
     import numpy as np
     from anchors.Anchor import Anchor
-    from anchors.GroundTruthBox import GroundTruthBox
+    from anchors.Ground_truth_box import Ground_truth_box
     from anchors.create_ground_truth_tensor_and_selection_tensor import create_ground_truth_tensor_and_selection_tensor
     import pickle
     import os
@@ -69,7 +69,7 @@ def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, fil
                     h = mnist_image[1][4]
                     label = mnist_image[1][0]
                     # create the ground truth box with the desired x, y, w, and h values
-                    ground_truth_boxes.append(GroundTruthBox(x, y, w, h, label))
+                    ground_truth_boxes.append(Ground_truth_box(x, y, w, h, label))
             # try to add each ground truth box to each anchor (see Anchor.append_ground_truth_box(...) for more
             # informationen)
             for anchor in anchor_objects:
