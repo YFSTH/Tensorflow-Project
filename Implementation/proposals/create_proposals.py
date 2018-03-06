@@ -30,7 +30,7 @@
                     pred_h = np.round(predicted_coordinates[0, x, y, t + 27])
                     # test whether the proposals region exceeds the region given by the image and adjust the shape of
                     # the proposal´s region
-                    if pred_x < 0 or pred_y < 0 or pred_x > 256 or pred_y > 256 or pred_w < 0 or pred_h < 0:
+                    if pred_x < 0 or pred_y < 0 or pred_x > 256 or pred_y > 256 or pred_w <= 0 or pred_h <= 0:
                         # if the proposal´s center pixel is outside the image frame deem the proposal to be invalid
                         proposal_on_fm_tensor[0, x, y, t + (np.arange(0, 4) * 9)] = -9
                         proposal_on_img_tensor[0, x, y, t + (np.arange(0, 4) * 9)] = -9
@@ -78,6 +78,10 @@
                         proposal_on_img_tensor[0, x, y, t + 27] = prop_h
                         # assign the proposal´s parameters with respect to the RPNs and Fast R-CNNs input feature
                         # map to the respective entries of the proposal
+
+                        if np.ceil(prop_w / 16) == 0 or np.ceil(prop_h / 16) == 0:
+                            import pdb;pdb.set_trace()
+
                         proposal_on_fm_tensor[0, x, y, t] = np.floor(prop_x / 16)
                         proposal_on_fm_tensor[0, x, y, t + 9] = np.floor(prop_y / 16)
                         proposal_on_fm_tensor[0, x, y, t + 18] = np.ceil(prop_w / 16)
