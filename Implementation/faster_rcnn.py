@@ -65,7 +65,7 @@ FINALLY_VALIDATE = True
 # Fast R-CNN
 ROI_FM_SIZE = 8
 EPOCHS_TRAINSTEP_2 = 5
-LR_FAST = 0.001
+LR_FAST = 0.01
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
@@ -299,7 +299,7 @@ with tf.variable_scope('fast_rcnn'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
         cls_loss = tf.nn.softmax(cls_score)
 
-    fast_loss = tf.reduce_sum(cls_loss + bbox_loss)
+    fast_loss = tf.reduce_sum(cls_loss + bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
     fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
 
@@ -341,7 +341,7 @@ if __name__ == "__main__":
         restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
 
-        #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
         feature_maps = []
         train_step = 0
@@ -436,10 +436,11 @@ if __name__ == "__main__":
 
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, loss = sess.run([fast_train, fast_loss], feed_dict={rois: pool5,
-                                                                               classes: gt_class,
-                                                                               boxes: gt_bounding_box})
-                        loss_history.append(loss)
+                        _, floss, closs, rloss = sess.run(
+                            [fast_train, fast_loss, cls_loss, bbox_loss],
+                            feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
+                        )
+                        loss_history.append([floss, closs, rloss])
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
