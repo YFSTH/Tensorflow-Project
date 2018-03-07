@@ -49,7 +49,6 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
         # not enough of both types of anchors
         to_be_deactivated_negative_anchors = 0
         to_be_deactivated_positive_anchors = 0
-
     if to_be_deactivated_positive_anchors > 0:
         # choose the anchors to un-select and unselect them by assigning -3 to anchor type param
         # located in the selection tensor, to indicate that the anchor won´t be used
@@ -59,7 +58,6 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
             a, x, y = valid_positive_anchor_coordinates[excess_anchor]
             # get the position of the x-center of the anchor
             selection_tensor[a, x, y, 0] = -3
-
     if to_be_deactivated_negative_anchors > 0:
         # choose the anchors to un-select and unselect them by assigning -3 to anchor type param
         # located in the selection tensor, to indicate that the anchor won´t be used
@@ -71,4 +69,3 @@ def anchors_selection(ground_truth_tensor, selection_tensor, num_selected):
             # and and mark the anchor as deactivated in the respective entry of the selection tensor
             selection_tensor[a, x, y, 0] = -3
     return selection_tensor
-

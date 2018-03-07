@@ -150,7 +150,3 @@ def select_proposals(iou_threshold, max_n_highest_cls_scores, logits, proposal_t
         if proposal_selection_tensor[idx_in_proposal_sel_tensor] == 1:
             updated_proposal_sel_tensor[idx_in_proposal_sel_tensor] = 1
     return updated_proposal_sel_tensor
-
-
-
-
