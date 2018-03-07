@@ -3,7 +3,6 @@ import pickle
 
 import numpy as np
 
-
 class MNISTCollage:
     """ Helper class for initializing MNIST Collage data set """
     def __init__(self, directory):

@@ -17,7 +17,6 @@ from proposals.create_proposals import create_proposals
 from proposals.select_proposals import select_proposals
 from vgg16.vgg16 import VGG16
 
-
 # Set class variables
 
 # Image generation
@@ -52,7 +51,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
@@ -62,12 +61,11 @@ FINALLY_VALIDATE = True
 
 # Fast R-CNN
 ROI_FM_SIZE = 8
-EPOCHS_TRAINSTEP_2 = 1
+EPOCHS_TRAINSTEP_2 = 5
 LR_FAST = 0.01
 STORE_FAST = True
 RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
-
 
 # Generate images xor load them if they already exist with the desired properties
 create_collages(num_collages=NUM_COLLAGES, collage_size=COLLAGE_SIZE, min_num_imgs=MIN_NUM_IMGS,
@@ -87,7 +85,9 @@ anchors = create_anchors_tensor(NUM_COLLAGES, NUM_ANCHORS, IMG_SIZE, VGG_FM_SIZE
 # width "                                        " third 9 "                     "
 # height "                                       " fourth "                      "
 
-# Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive
+# Evaluate anchors and assign the nearest ground truth box to the anchors evaluated as positive and select only a prede-
+# fined number of anchors for later use (ideally a ratio of 1:1 positive to negative anchors for the rpn classification
+# is achieved)
 eval = partial(anchors_evaluation, batch_anchor_tensor=anchors, load_last_anchors=LOAD_LAST_ANCHORS,
                num_selected=NUM_SELECTED_ANCHORS, lower_threshold=LOWER_THRESHOLD, upper_threshold=UPPER_THRESHOLD)
 train_ground_truth_tensor, train_selection_tensor = eval(imgs=batcher.train_data, labels=batcher.train_labels, filename='train_anchors')
@@ -100,8 +100,8 @@ test_ground_truth_tensor, test_selection_tensor = eval(imgs=batcher.test_data, l
 #                (= -3) and MNIST_CLASS indicates the mnist number class of the assigned ground truth mnist image xor
 #                '-2' if no ground truth box was assigned
 
-# swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN
-# and add length 1 zero dimension
+# swap dimensions of anchor tensors to fit the shape of the predicted coordinates tensor of the RPN and add length 1
+# zero dimension
 swapaxes = lambda x: np.swapaxes(np.swapaxes(x, 1, 2), 2, 3)
 anchors = swapaxes(anchors).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
 train_ground_truth_tensor = swapaxes(train_ground_truth_tensor).reshape((NUM_COLLAGES, 1, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4))
@@ -117,28 +117,41 @@ test_selection_tensor = swapaxes(test_selection_tensor).reshape((NUM_COLLAGES, 1
 ### Region Proposal Network RPN
 
 with tf.variable_scope('rpn'):
+    # the region proposal network regresses the parameters of each positive anchor onto the parameters of the assigned
+    # ground truth box (=mnist image) and uses anchors evaluated as positive and anchors evaluated as negative to learn
+    # to predict the likelihood that the region encompassed by the anchors region contains an object (objectness / cls
+    # score)
 
     with tf.name_scope('placeholders'):
+        # Placeholders for input collage(s batch) and associated label list (one label for each small mnist image added
+        # to the collage)
         X = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, VGG_FM_NUM])
         Y = tf.placeholder(tf.float32, [BATCH_SIZE, MAX_NUM_IMGS, 7])
+        # Placeholders for the anchors coordinates, the groundtruth coordinates, thus the coordinates of the ground
+        # truth box the respective anchor was assigned to (if any) and the selection tensor harboring e.g. information
+        # about the type of the anchor (positive / neutral / negative)
         anchor_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
         groundtruth_coordinates = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS*4])
         selection_tensor = tf.placeholder(tf.float32, [BATCH_SIZE, VGG_FM_SIZE, VGG_FM_SIZE, NUM_ANCHORS, 3])
 
     with tf.variable_scope('pre_heads_layer'):
+        # first convolutional layer of the rpn, resembling the shifting of the network over the input feature map
         prehead_conv = convolutional(X, [3, 3, 512, 512], 1, False)
-        # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 512)
 
     with tf.name_scope('regression_head'):
+        # in the regression head the bounding box regression will be performed
         with tf.variable_scope('predictions'):
+            # the regression weights are resembled by the weights of the convolutional layer (the intercept by the bias
+            # of the convolutional layer) the output of the convolutional layer resembles the predicted coordinates
             predicted_coordinates = convolutional(prehead_conv, [1, 1, 512, 36], 1, False)
-            # results in a tensor with shape (1, IMG_SIZE, IMG_SIZE, 36)
 
         with tf.variable_scope('regression_parametrization'):
-            # perform boxregression parametrization by transforming the coordinates and width and height to yield the
-            # predicted and true (=target) coordinate parameters used for the regression loss
+            # perform boxregression parametrization by transforming the predicted x and y coordinates and width and
+            # height (= the proposal coordinates) to yield the transformed predicted and true (=target) coordinate para-
+            # meters used for the regression loss
             tx_xor_ty = lambda t1, t2, t3: tf.divide(tf.subtract(t1, t2), t3)
             tw_xor_th = lambda t1, t2: tf.log(tf.divide(t1, t2))
+            # the following operations yield the transformed predicted parameters
             tx = tx_xor_ty(predicted_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9],
                            anchor_coordinates[:, :, :, 18:27])
             ty = tx_xor_ty(predicted_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18],
@@ -146,7 +159,9 @@ with tf.variable_scope('rpn'):
             tw = tw_xor_th(predicted_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
             th = tw_xor_th(predicted_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
             t_predicted = tf.concat([tx, ty, tw, th], axis=0)
+            # remove nans caused by division
             t_predicted = tf.where(tf.is_nan(t_predicted), tf.zeros_like(t_predicted), t_predicted)
+            # the following operations yield the transformed target / ground truth box parameters
             ttx = tx_xor_ty(groundtruth_coordinates[:, :, :, 0:9], anchor_coordinates[:, :, :, 0:9],
                             anchor_coordinates[:, :, :, 18:27])
             tty = tx_xor_ty(groundtruth_coordinates[:, :, :, 9:18], anchor_coordinates[:, :, :, 9:18],
@@ -154,132 +169,96 @@ with tf.variable_scope('rpn'):
             ttw = tw_xor_th(groundtruth_coordinates[:, :, :, 18:27], anchor_coordinates[:, :, :, 18:27])
             tth = tw_xor_th(groundtruth_coordinates[:, :, :, 27:36], anchor_coordinates[:, :, :, 27:36])
             t_target = tf.concat([ttx, tty, ttw, tth], axis=0)
+            # remove nans caused by division
             t_target = tf.where(tf.is_nan(t_target), tf.zeros_like(t_target), t_target)
-            # t_target and t_predicted should have shape (4, feature map size, feature map size, number of anchors)
 
             with tf.variable_scope('regression_loss'):
                 def smooth_l1_loss(raw_deviations, selection_tensor):
-                    # raw deviations of shape (4, 16, 16, 9)
-                    # lect deviations for anchors marked as positive
+                    # select deviations for anchors marked as positive
                     activation_value = tf.constant(1.0, dtype=tf.float32)
                     filter_plane = tf.cast(tf.equal(selection_tensor[:, :, :, :, 0], activation_value), tf.float32)
-
-                    # remove nans from tensor to enable aggregating calculations
-                    # filter_plane = tf.where(tf.is_nan(filter_plane), tf.zeros_like(filter_plane),
-                    #                          filter_plane)
-
-                    # filter plane shape: (1, 16, 16, 9)
-                    # auf ebene 1 ein positive value auf ebene 7 zwei positive values
                     filter_tensor = tf.tile(filter_plane, [4, 1, 1, 1])
-
                     filtered_tensor = tf.multiply(raw_deviations, filter_tensor)
-
                     filtered_tensor = tf.where(tf.is_nan(filtered_tensor), tf.zeros_like(filtered_tensor),
                                                filtered_tensor)
-
                     # calculate the smooth l1 loss
-
-                    # sum up deviations for the four coordinates per anchor
-
                     absolute_deviations = tf.abs(filtered_tensor)
-                    # absolute_deviations = tf.reduce_sum(tf.abs(filtered_tensor), 0)
-                    # shape: (4, 16, 16, 9)
-
-                    # absolute deviations
-                    # absolute_deviations = tf.abs(summed_deviations)
-
                     # case 1: l(x), |x| < 1
                     case1_sel_tensor = tf.less(absolute_deviations, 1)
-                    # shape: (4, 16, 16, 9)
                     case1_deviations = tf.multiply(absolute_deviations, tf.cast(case1_sel_tensor, tf.float32))
-                    # shape: (4, 16, 16, 9)
                     case1_output = tf.multiply(tf.square(case1_deviations), 0.5)
-                    # shape: (4, 16, 16, 9)
-
                     # case 2: otherwise
                     case2_sel_tensor = tf.greater_equal(absolute_deviations, 1)
-                    # shape: (4, 16, 16, 9)
                     case2_output = tf.subtract(absolute_deviations, 0.5)
-                    # shape: (4, 16, 16, 9)
                     case2_output = tf.multiply(case2_output, tf.cast(case2_sel_tensor, tf.float32))
-                    # shape: (4, 16, 16, 9)
-
                     smooth_anchor_losses = case1_output + case2_output
-                    # shape: (4, 16, 16, 9)
-
+                    # sum smooth anchor loss over all anchors
                     unnormalized_reg_loss = tf.reduce_sum(smooth_anchor_losses)
-
+                    # ... and normalize it by the total number of anchors
                     normalized_reg_loss = tf.truediv(unnormalized_reg_loss, tf.cast((VGG_FM_SIZE ** 2) * 9, tf.float32))
-
                     return normalized_reg_loss
-
-
+                # calculate the raw deviations between the transformed prediction and target parameters
                 raw_deviations = tf.subtract(t_predicted, t_target)
+                # ... and calculate the smooth l1 loss
                 rpn_reg_loss_normalized = smooth_l1_loss(raw_deviations, selection_tensor)
 
-
         with tf.variable_scope('classification_head'):
+            # predicts the probability that the region encompassed by the respective anchor contains an object (object-
+            # ness score)
+            # the following convolutional layer produces two logits for each anchor, one logit represents the logit for
+            # not being an object, the other for being an object
             clshead_conv1 = convolutional(prehead_conv, [1, 1, 512, NUM_ANCHORS * 2], 1, False, RPN_ACTFUN)
-            # should be of shape (BATCH_SIZE, 16, 16, NUM_ANCHORS*2)
 
             with tf.variable_scope('classification_loss'):
-                # filter logits for the 256 to be activated anchors
                 logits = tf.reshape(clshead_conv1, [BATCH_SIZE * VGG_FM_SIZE * VGG_FM_SIZE * NUM_ANCHORS, 2])
-
+                # get the anchor type ("1" for positive anchor, "0" for negative, "-1" for neutral and "-3" for de-
+                # activated) out of the selection tensor
                 reshaped_targets = tf.reshape(selection_tensor[:, :, :, :, 0],
                                               [BATCH_SIZE * VGG_FM_SIZE * VGG_FM_SIZE * NUM_ANCHORS, 1])
-                # shape: (Batch size * fm size * fm size, 1)
-
+                # include only positive and negative anchors (the amount is limit by the anchor selection procedure per-
+                # formed by anchor_selection(...))
                 inclusion_idxs = tf.greater_equal(reshaped_targets, 0)
-                # 256 True, rest False
-
                 # filter out all neutral anchors
                 tmp2 = tf.boolean_mask(tf.reshape(logits[:, 0], [tf.shape(logits)[0], 1]), inclusion_idxs)
                 tmp3 = tf.boolean_mask(tf.reshape(logits[:, 1], [tf.shape(logits)[0], 1]), inclusion_idxs)
+                # also the logits of the not-to-be-used anchors have to be filtered out
                 logits_filtered = tf.concat(
                     [tf.reshape(tmp2, [tf.shape(tmp2)[0], 1]), tf.reshape(tmp3, [tf.shape(tmp3)[0], 1])], axis=1)
-
                 # create target vector
                 # filter label entries according to the filtered logits
                 sampled_targets = tf.reshape(tf.boolean_mask(reshaped_targets, inclusion_idxs), [tf.shape(tmp3)[0], 1])
-                tmp4 = tf.ones_like(sampled_targets)
+                ones = tf.ones_like(sampled_targets)
+                # get indices of positive anchors
                 idx = tf.equal(sampled_targets, 1)
+                # get indices of positive anchors
                 idxi = tf.not_equal(sampled_targets, 1)
+                # create labels
                 targets_filtered = tf.concat(
-                    [tf.multiply(tmp4, tf.cast(idxi, tf.float32)), tf.multiply(tmp4, tf.cast(idx, tf.float32))], axis=1)
-
+                    [tf.multiply(ones, tf.cast(idxi, tf.float32)), tf.multiply(ones, tf.cast(idx, tf.float32))], axis=1)
                 # calculate the accuracy
                 predictions = tf.round(tf.nn.softmax(logits_filtered, axis=1))
                 accuracy = tf.reduce_mean(tf.cast(tf.equal(predictions, targets_filtered), tf.float32))
-
                 # calculate the cross entropy loss
-                rpn_cls_loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered, logits=logits_filtered))
+                rpn_cls_loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=targets_filtered,
+                                                                                     logits=logits_filtered))
+                # and normalize it by the number of selected anchors
                 rpn_cls_loss_normalized = tf.truediv(rpn_cls_loss, tf.cast(NUM_SELECTED_ANCHORS, tf.float32))
 
         with tf.name_scope('overall_loss'):
+            # calculation of the overall loss of the rpn
             overall_loss = rpn_cls_loss_normalized + REG_TO_CLS_LOSS_RATIO * rpn_reg_loss_normalized
 
         with tf.variable_scope('costs_and_optimization'):
+            # optimization by adam optimizer with piecewise decreasing learning rate
             global_step = tf.Variable(0, trainable=False)
             boundaries = [1200, 1600]
             values = [0.001, 0.0001, 0.000005]
             learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
-
-            # rpn_train_op = tf.train.AdamOptimizer(LR_RPN, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(overall_loss)
-            # rpn_train_op = tf.train.MomentumOptimizer(learning_rate, momentum=0.9).minimize(overall_loss, global_step=global_step)
             rpn_train_op = tf.train.AdamOptimizer(learning_rate).minimize(overall_loss, global_step=global_step)
-            #rpn_train_op = tf.train.AdamOptimizer(LR_RPN).minimize(overall_loss)
-            # AMSGrad = AMSGrad(learning_rate)
-            # rpn_train_op = AMSGrad.minimize(overall_loss, global_step=global_step)
-
-            # regularizer = tf.nn.l2_loss(weights)
-            # loss = tf.reduce_mean(loss + beta * regularizer)
-
 
 ### Fast R-CNN
 
 with tf.variable_scope('fast_rcnn'):
-
     rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM/2])
     classes = tf.placeholder(tf.int64, [BATCH_SIZE])
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 4])
@@ -329,26 +308,27 @@ if __name__ == "__main__":
     vgg16 = VGG16()
     vgg16.build(images)
 
-    logits_ = []
-    train_proposals_img = []
-    train_proposals_fm = []
-    valid_proposals_img = []
-    valid_proposals_fm = []
-
+    # start the tensorflow session
     with tf.Session() as sess:
-
-        sess.run(tf.global_variables_initializer())
-
         # Initialize xor restore the required sub-models
         restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
-        restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
-        restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
+        if RESTORE_RPN:
+            restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+        if RESTORE_FAST:
+            restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
+        else:
+            sess.run(tf.global_variables_initializer())
 
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
+        # define variables for saving the diverse outputs of the rpn and fast r-cnn and variables used for later usage
+        logits_ = []
+        train_proposals_img = []
+        train_proposals_fm = []
+        valid_proposals_img = []
+        valid_proposals_fm = []
         feature_maps = []
         train_step = 0
-
         xt = None
         yt = None
         tpreds = None
@@ -357,52 +337,55 @@ if __name__ == "__main__":
         reg_loss_list = []
         cls_loss_list = []
         oal_loss_list = []
+        accuracy_list = []
 
+        # rpn training epochs (training step 1)
         for epoch in range(EPOCHS_TRAINSTEP_1):
+            # get collage and associated label list
             for X_batch, Y_batch, first, last in batcher.get_batch(BATCH_SIZE):
-                if BATCH_SIZE == 1:
+                # feed the input collage to the pretrained vgg and obtain feature maps tensor used as input for the rpn
+                result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
+                vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch})
+                # feed feature maps tensor to rpn and extract accuracy, losses, and predictions and logits used for
+                # later processing
+                _, accu, rp, logits__, lr, lc, ol = sess.run(
+                    [rpn_train_op, accuracy, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized,
+                     rpn_cls_loss_normalized, overall_loss],
+                    feed_dict={X: vgg16_conv5_3_relu,
+                               Y: Y_batch,
+                               anchor_coordinates: anchors[first],
+                               groundtruth_coordinates: train_ground_truth_tensor[first],
+                               selection_tensor: train_selection_tensor[first]}
+                )
 
-                    result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-                    vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch})
+                xt = X_batch
+                yt = Y_batch
+                tpreds = rp
+                reg_loss_list.append(lr)
+                cls_loss_list.append(lc)
+                oal_loss_list.append(ol)
+                accuracy_list.append(accu)
+                tslt.append(train_selection_tensor[first])
+                gtt.append(train_ground_truth_tensor[first])
 
-                    _, accu, rp, logits__, lr, lc, ol = sess.run(
-                        [rpn_train_op, accuracy, predicted_coordinates, clshead_conv1, rpn_reg_loss_normalized,
-                         rpn_cls_loss_normalized, overall_loss],
-                        feed_dict={X: vgg16_conv5_3_relu,
-                                   Y: Y_batch,
-                                   anchor_coordinates: anchors[first],
-                                   groundtruth_coordinates: train_ground_truth_tensor[first],
-                                   selection_tensor: train_selection_tensor[first]}
-                    )
+                if epoch + 1 == EPOCHS_TRAINSTEP_1:
+                    proposal_img, proposal_fm, train_selection_tensor[first] = create_proposals(tpreds, tslt[-1])
+                    train_proposals_img.append(proposal_img)
+                    train_proposals_fm.append(proposal_fm)
+                    feature_maps.append(vgg16_conv5_3_relu)
 
-                    xt = X_batch
-                    yt = Y_batch
-                    tpreds = rp
-                    reg_loss_list.append(lr)
-                    cls_loss_list.append(lc)
-                    oal_loss_list.append(ol)
-                    tslt.append(train_selection_tensor[first])
-                    gtt.append(train_ground_truth_tensor[first])
+                logits_.append(logits__)
 
-                    if epoch + 1 == EPOCHS_TRAINSTEP_1:
-                        proposal_img, proposal_fm, train_selection_tensor[first] = create_proposals(tpreds, tslt[-1])
-                        train_proposals_img.append(proposal_img)
-                        train_proposals_fm.append(proposal_fm)
-                        feature_maps.append(vgg16_conv5_3_relu)
-
-                    logits_.append(logits__)
-
-                    if train_step % 9 == 0:
-                        print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'accuracy:', np.round(accu, 2))
-                    train_step += 1
+                if train_step % 9 == 0:
+                    print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'accuracy:', np.round(accu, 2))
+                train_step += 1
 
         with open('proposal_debugging.pkl', 'wb') as file:
             pickle.dump([logits_, train_proposals_img, gtt, tslt], file)
-
         with open('dump.pkl', 'wb') as file:
-            pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
+            pickle.dump([accuracy_list, xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
-        # select proposals according to IoU with mnist image and cls score
+        # select proposals according to IoU with mnist image and the cls score
         print('select proposals')
         proposal_selection_tensor = select_proposals(iou_threshold=0.15, max_n_highest_cls_scores=9999, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
@@ -412,6 +395,7 @@ if __name__ == "__main__":
         with open('proposal_selection_tensor.pkl', 'wb') as file:
             pickle.dump([proposal_selection_tensor], file)
 
+        # start the training of the Fast R-CNN
         print('training step 2 started')
 
         fast_loss_history = []
@@ -456,3 +440,4 @@ if __name__ == "__main__":
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
+
