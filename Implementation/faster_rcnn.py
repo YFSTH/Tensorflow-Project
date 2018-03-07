@@ -266,24 +266,27 @@ with tf.variable_scope('fast_rcnn'):
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.leaky_relu)
 
     #with tf.variable_scope('layer_7'):
 
-    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.relu)
+    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.leaky_relu)
+
 
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc6, 40, False, tf.nn.relu)
+        bbox_pred = fully_connected(fc6, 40, False, tf.nn.leaky_relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
         bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
 
     with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc6, 10, False, tf.nn.relu)
-        cls_loss = tf.reduce_sum(tf.nn.softmax(cls_score))
+        cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
+        cls_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_score)
+        cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(tf.nn.softmax(cls_score), 1), classes), tf.float32))
 
-    fast_loss = tf.reduce_sum(cls_loss + bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
+
+    fast_loss = tf.reduce_sum(cls_loss) + tf.reduce_sum(bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
     fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
 
@@ -396,9 +399,10 @@ if __name__ == "__main__":
         with open('proposal_selection_tensor.pkl', 'wb') as file:
             pickle.dump([proposal_selection_tensor], file)
 
-        fast_loss_list = []
-        cls_loss_list = []
-        bbox_loss_list = []
+
+        loss_history = []
+        accu_history = []
+
 
         # start the training of the Fast R-CNN
         print('training step 2 started')
@@ -423,14 +427,16 @@ if __name__ == "__main__":
 
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, floss, closs, rloss = sess.run(
-                            [fast_train, fast_loss, cls_loss, bbox_loss],
+                        _, floss, closs, rloss, accu = sess.run(
+                            [fast_train, fast_loss, cls_loss, bbox_loss, cls_accuracy],
                             feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
                         )
-                        fast_loss_list.append(floss)
-                        cls_loss_list.append(closs)
-                        bbox_loss_list.append(rloss)
+
+
+                        loss_history.append([floss, closs, rloss])
+                        accu_history.append([accu])
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
-            pickle.dump([fast_loss_list, cls_loss_list, bbox_loss_list], file)
+            pickle.dump(loss_history, file)
+            pickle.dump(accu_history, file)

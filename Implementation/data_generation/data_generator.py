@@ -329,4 +329,3 @@ def scale_pyramid(img, min_scaling=0.25, max_scaling=2.0, scaling_steps=5):
         # apply skimage scaling
         pyramid.append(rescale(img, scale))
     return pyramid, scales
-
