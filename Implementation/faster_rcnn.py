@@ -274,7 +274,7 @@ with tf.variable_scope('fast_rcnn'):
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
-        bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2))
+        bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2, axis=1) / (VGG_FM_SIZE**2 * NUM_ANCHORS))
 
     with tf.variable_scope('cls_score'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
@@ -405,21 +405,24 @@ if __name__ == "__main__":
             for n, image in enumerate(feature_maps):
                 for i, j, k in np.ndindex(16, 16, 9):
                     if train_selection_tensor[n][:, i, j, k, 0] == 1:
-
+                        # create bounding box from proposals
                         bounding_box = np.zeros(4, dtype=np.int32)
                         bounding_box[0] = train_proposals_fm[n][:, i, j, k]
                         bounding_box[1] = train_proposals_fm[n][:, i, j, 9+k]
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
+                        # bring regions of interest (ROI) to same size
                         pool5 = roi_pooling(image[:, :, :, 256:512], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
+                        # create ground truth bounding box from proposals
                         gt_bounding_box = np.zeros((BATCH_SIZE, 4))
                         gt_bounding_box[:, 0] = train_proposals_img[n][:, i, j, k]
                         gt_bounding_box[:, 1] = train_proposals_img[n][:, i, j, 9 + k]
                         gt_bounding_box[:, 2] = train_proposals_img[n][:, i, j, 18 + k]
                         gt_bounding_box[:, 3] = train_proposals_img[n][:, i, j, 27 + k]
 
+                        # get MNIST class
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
                         _, f_loss, c_loss, r_loss, accu = sess.run(
@@ -437,7 +440,6 @@ if __name__ == "__main__":
         with open('fast_accu_history.pkl', 'wb') as file:
             pickle.dump(fast_accu_history, file)
 
-        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
-        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
-        storer(STORE_FAST, fast_saver, 'fast.ckpt')
-
+        #storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        #storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        #storer(STORE_FAST, fast_saver, 'fast.ckpt')
