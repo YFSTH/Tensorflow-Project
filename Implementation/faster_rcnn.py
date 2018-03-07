@@ -259,29 +259,31 @@ with tf.variable_scope('rpn'):
 ### Fast R-CNN
 
 with tf.variable_scope('fast_rcnn'):
+    # input placeholders
     rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM/2])
     classes = tf.placeholder(tf.int64, [BATCH_SIZE])
     boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 4])
 
     with tf.variable_scope('layer_6'):
-        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.leaky_relu)
+        fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 4096, False, tf.nn.leaky_relu)
 
-    #with tf.variable_scope('layer_7'):
-    #    fc7 = fully_connected(fc6, 1024, False, tf.nn.leaky_relu)
+    with tf.variable_scope('layer_7'):
+        fc7 = fully_connected(fc6, 1024, False, tf.nn.leaky_relu)
 
+    # bounding box regression
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc6, 4, False, tf.nn.leaky_relu)
+        bbox_pred = fully_connected(fc7, 4, False, tf.nn.leaky_relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
         bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2, axis=1) / (VGG_FM_SIZE**2 * NUM_ANCHORS))
 
+    # classification
     with tf.variable_scope('cls_score'):
-        cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
+        cls_score = fully_connected(fc7, 10, False, tf.nn.leaky_relu)
         cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_score))
-        cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(tf.nn.softmax(cls_score), 1), classes), tf.float32))
 
-
+    # multi-task loss
     fast_loss = cls_loss + bbox_loss
     fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
@@ -411,7 +413,6 @@ if __name__ == "__main__":
         print('training step 2 started')
 
         fast_loss_history = []
-        fast_accu_history = []
 
         for epoch in range(EPOCHS_TRAINSTEP_2):
             for n, image in enumerate(feature_maps):
@@ -437,15 +438,19 @@ if __name__ == "__main__":
                         # get MNIST class
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, f_loss, c_loss, r_loss, accu = sess.run(
-                            [fast_train, fast_loss, cls_loss, bbox_loss, cls_accuracy],
+                        _, f_loss, c_loss, r_loss = sess.run(
+                            [fast_train, fast_loss, cls_loss, bbox_loss],
                             feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
                         )
 
+                        # save loss
                         fast_loss_history.append([f_loss, c_loss, r_loss])
-                        fast_accu_history.append(accu)
 
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
+
+        # serialize results
+        with open('fast_loss_history.pkl', 'wb') as file:
+            pickle.dump(fast_loss_history, file)
 
         #storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         #storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
