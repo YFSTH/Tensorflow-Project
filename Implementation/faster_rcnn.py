@@ -51,7 +51,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 12
+EPOCHS_TRAINSTEP_1 = 1
 RPN_ACTFUN = tf.nn.elu
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
@@ -274,7 +274,7 @@ with tf.variable_scope('fast_rcnn'):
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
-        bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2))
+        bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2, axis=1) / (VGG_FM_SIZE**2 * NUM_ANCHORS))
 
     with tf.variable_scope('cls_score'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
@@ -381,9 +381,24 @@ if __name__ == "__main__":
                           np.round(accu, 2))
                 train_step += 1
 
-        with open('dump.pkl', 'wb') as file:
-            pickle.dump([accuracy_list, collage_copy, labels_copy, train_selection_tensor[selection_tensor_copy],
-                         proposed_coordinates, reg_loss_list, cls_loss_list, oal_loss_list], file)
+
+        # plot the losses development and the arruracy
+        plt.figure(figsize=(15, 7))
+        plt.subplot(1, 2, 1)
+        plt.plot(reg_loss_list, color='red', alpha=0.75, label='regression loss')
+        plt.plot(cls_loss_list, color='blue', alpha=0.75, label='classification loss')
+        plt.plot(oal_loss_list, color='gray', alpha=0.75, label='overall loss')
+        plt.legend(fontsize=14)
+        plt.title('development of the rpn´s losses', fontweight='bold', fontsize=15)
+        plt.xlabel('iteration #', fontsize=15)
+        plt.ylabel('loss [different measures!]', fontsize=15)
+        plt.subplot(1, 2, 2)
+        plt.plot(accuracy_list, color='blue', alpha=0.75)
+        plt.legend(fontsize=14)
+        plt.title('accuracy of objectness classification', fontweight='bold', fontsize=15)
+        plt.xlabel('iteration #', fontsize=15)
+        plt.ylabel('accuracy', fontsize=15)
+        plt.show()
 
         # select proposals according to IoU with mnist image and the cls score
         print('select proposals')
@@ -391,10 +406,6 @@ if __name__ == "__main__":
                                                     proposal_tensor=train_proposals_img,
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
-
-
-        with open('proposals_tensors.pkl', 'wb') as file:
-            pickle.dump([train_proposals_img, train_ground_truth_tensor, proposal_selection_tensor], file)
 
         # start the training of the Fast R-CNN
         print('training step 2 started')
@@ -406,21 +417,24 @@ if __name__ == "__main__":
             for n, image in enumerate(feature_maps):
                 for i, j, k in np.ndindex(16, 16, 9):
                     if train_selection_tensor[n][:, i, j, k, 0] == 1:
-
+                        # create bounding box from proposals
                         bounding_box = np.zeros(4, dtype=np.int32)
                         bounding_box[0] = train_proposals_fm[n][:, i, j, k]
                         bounding_box[1] = train_proposals_fm[n][:, i, j, 9+k]
                         bounding_box[2] = train_proposals_fm[n][:, i, j, 18+k]
                         bounding_box[3] = train_proposals_fm[n][:, i, j, 27+k]
 
+                        # bring regions of interest (ROI) to same size
                         pool5 = roi_pooling(image[:, :, :, 256:512], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
+                        # create ground truth bounding box from proposals
                         gt_bounding_box = np.zeros((BATCH_SIZE, 4))
                         gt_bounding_box[:, 0] = train_proposals_img[n][:, i, j, k]
                         gt_bounding_box[:, 1] = train_proposals_img[n][:, i, j, 9 + k]
                         gt_bounding_box[:, 2] = train_proposals_img[n][:, i, j, 18 + k]
                         gt_bounding_box[:, 3] = train_proposals_img[n][:, i, j, 27 + k]
 
+                        # get MNIST class
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
                         _, f_loss, c_loss, r_loss, accu = sess.run(
@@ -433,12 +447,7 @@ if __name__ == "__main__":
 
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
-        with open('fast_loss_history.pkl', 'wb') as file:
-            pickle.dump(fast_loss_history, file)
-        with open('fast_accu_history.pkl', 'wb') as file:
-            pickle.dump(fast_accu_history, file)
+        #storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        #storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        #storer(STORE_FAST, fast_saver, 'fast.ckpt')
 
-
-        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
-        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
-        storer(STORE_FAST, fast_saver, 'fast.ckpt')
