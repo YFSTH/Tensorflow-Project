@@ -57,7 +57,7 @@ EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
-RESTORE_RPN = False
+#RESTORE_RPN = False
 RPN_PATH = './checkpoints/rpn.ckpt'
 FINALLY_VALIDATE = True
 
@@ -66,7 +66,7 @@ ROI_FM_SIZE = 8
 EPOCHS_TRAINSTEP_2 = 5
 LR_FAST = 0.01
 STORE_FAST = True
-RESTORE_FAST = False
+#RESTORE_FAST = False
 FAST_PATH = './checkpoints/fast.ckpt'
 
 # Generate images xor load them if they already exist with the desired properties
@@ -283,7 +283,7 @@ with tf.variable_scope('fast_rcnn'):
     with tf.variable_scope('cls_score'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
         cls_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_score)
-        cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(tf.nn.softmax(cls_score), 1), classes), tf.float32))
+        cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.argmax(tf.nn.softmax(cls_score), 1), tf.int32), classes), tf.float32))
 
 
     fast_loss = tf.reduce_sum(cls_loss) + tf.reduce_sum(bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
@@ -315,14 +315,11 @@ if __name__ == "__main__":
 
     # start the tensorflow session
     with tf.Session() as sess:
-        # Initialize xor restore the required sub-models
-        restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
-        if RESTORE_RPN:
-            restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
-        if RESTORE_FAST:
-            restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
-        else:
-            sess.run(tf.global_variables_initializer())
+        # Initialize the variables
+        sess.run(tf.global_variables_initializer())
+        #restore_xor_init = lambda restore, saver, path, ini: saver.restore(sess, path) if restore else sess.run(ini)
+        #restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
+        #restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
         #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
         # define variables for saving the diverse outputs of the rpn and fast r-cnn and variables used for later usage
@@ -333,11 +330,10 @@ if __name__ == "__main__":
         valid_proposals_fm = []
         feature_maps = []
         train_step = 0
-        xt = None
-        yt = None
-        tpreds = None
-        tslt = []
-        gtt = []
+        collage_copy = None
+        labels_copy = None
+        proposed_coordinates = None
+        selection_tensor_copy = []
         reg_loss_list = []
         cls_loss_list = []
         oal_loss_list = []
@@ -362,32 +358,32 @@ if __name__ == "__main__":
                                selection_tensor: train_selection_tensor[first]}
                 )
 
-                xt = X_batch
-                yt = Y_batch
-                tpreds = rp
+                collage_copy = X_batch
+                labels_copy = Y_batch
+                proposed_coordinates = rp
                 reg_loss_list.append(lr)
                 cls_loss_list.append(lc)
                 oal_loss_list.append(ol)
                 accuracy_list.append(accu)
-                tslt.append(train_selection_tensor[first])
-                gtt.append(train_ground_truth_tensor[first])
+                selection_tensor_copy = train_selection_tensor[first]
 
                 if epoch + 1 == EPOCHS_TRAINSTEP_1:
-                    proposal_img, proposal_fm, train_selection_tensor[first] = create_proposals(tpreds, tslt[-1])
+                    proposal_img, proposal_fm, train_selection_tensor[first] = create_proposals(proposed_coordinates,
+                                                                                                selection_tensor_copy)
                     train_proposals_img.append(proposal_img)
                     train_proposals_fm.append(proposal_fm)
                     feature_maps.append(vgg16_conv5_3_relu)
 
                 logits_.append(logits__)
 
-                if train_step % 9 == 0:
-                    print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'accuracy:', np.round(accu, 2))
+                if train_step % 10 == 0:
+                    print('iteration:', train_step, 'reg loss:', lr, 'cls loss:', lc, 'overall loss:', ol, 'accuracy:',
+                          np.round(accu, 2))
                 train_step += 1
 
-        with open('proposal_debugging.pkl', 'wb') as file:
-            pickle.dump([logits_, train_proposals_img, gtt, tslt], file)
         with open('dump.pkl', 'wb') as file:
-            pickle.dump([accuracy_list, xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
+            pickle.dump([accuracy_list, collage_copy, labels_copy, train_selection_tensor[selection_tensor_copy],
+                         proposed_coordinates, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
         # select proposals according to IoU with mnist image and the cls score
         print('select proposals')
@@ -396,13 +392,11 @@ if __name__ == "__main__":
                                                     ground_truth_tensor=train_ground_truth_tensor,
                                                     selection_tensor=train_selection_tensor, training=True)
 
-        with open('proposal_selection_tensor.pkl', 'wb') as file:
-            pickle.dump([proposal_selection_tensor], file)
-
+        with open('proposals_tensors.pkl', 'wb') as file:
+            pickle.dump([train_proposals_img, train_ground_truth_tensor, proposal_selection_tensor], file)
 
         loss_history = []
         accu_history = []
-
 
         # start the training of the Fast R-CNN
         print('training step 2 started')
@@ -432,11 +426,13 @@ if __name__ == "__main__":
                             feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
                         )
 
-
                         loss_history.append([floss, closs, rloss])
                         accu_history.append([accu])
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
-            pickle.dump(loss_history, file)
-            pickle.dump(accu_history, file)
+            pickle.dump([loss_history, accu_history], file)
+
+        storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
+        storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
+        storer(STORE_FAST, fast_saver, 'fast.ckpt')
