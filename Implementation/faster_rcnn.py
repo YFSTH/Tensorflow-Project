@@ -3,7 +3,6 @@
 # Import packages
 import pickle
 from functools import partial
-
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -51,7 +50,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 1
+EPOCHS_TRAINSTEP_1 = 12
 RPN_ACTFUN = tf.nn.elu
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
