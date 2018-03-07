@@ -1,8 +1,6 @@
 ### Preparation #######################################################################################################
 
 # Import packages
-import datetime
-import os
 import pickle
 from functools import partial
 
@@ -30,7 +28,7 @@ MAX_NUM_IMGS = 4
 REPLACEMENT = True
 ALLOW_OVERHANG = False
 BACKGROUND = 'black'
-MIN_SCALING = 3  # original MNIST images size is 28x28
+MIN_SCALING = 3  # original MNIST image size is 28x28
 MAX_SCALING = 3
 SCALING_STEPS = 1
 COUNTERCLOCK_ANGLE = 0
@@ -54,7 +52,7 @@ NUM_SELECTED_ANCHORS = 256
 
 # RPN
 REG_TO_CLS_LOSS_RATIO = 10
-EPOCHS_TRAINSTEP_1 = 12
+EPOCHS_TRAINSTEP_1 = 1
 RPN_ACTFUN = tf.nn.elu
 CKPT_PATH = './checkpoints/'
 STORE_RPN = True
@@ -64,7 +62,7 @@ FINALLY_VALIDATE = True
 
 # Fast R-CNN
 ROI_FM_SIZE = 8
-EPOCHS_TRAINSTEP_2 = 5
+EPOCHS_TRAINSTEP_2 = 1
 LR_FAST = 0.01
 STORE_FAST = True
 RESTORE_FAST = False
@@ -283,8 +281,8 @@ with tf.variable_scope('rpn'):
 with tf.variable_scope('fast_rcnn'):
 
     rois = tf.placeholder(tf.float32, [BATCH_SIZE, ROI_FM_SIZE, ROI_FM_SIZE, VGG_FM_NUM/2])
-    classes = tf.placeholder(tf.int32, [BATCH_SIZE])
-    boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 40])
+    classes = tf.placeholder(tf.int64, [BATCH_SIZE])
+    boxes = tf.placeholder(tf.float32, [BATCH_SIZE, 4])
 
     with tf.variable_scope('layer_6'):
         fc6 = fully_connected(tf.reshape(rois, [-1, np.prod(rois.shape[1:])]), 1024, False, tf.nn.leaky_relu)
@@ -293,18 +291,18 @@ with tf.variable_scope('fast_rcnn'):
     #    fc7 = fully_connected(fc6, 1024, False, tf.nn.leaky_relu)
 
     with tf.variable_scope('bbox_pred'):
-        bbox_pred = fully_connected(fc6, 40, False, tf.nn.leaky_relu)
+        bbox_pred = fully_connected(fc6, 4, False, tf.nn.leaky_relu)
         bbox_diff = bbox_pred - boxes
         bbox_case_1 = 0.5 * tf.pow(bbox_diff, 2) * tf.cast(tf.less(tf.abs(bbox_diff), 1), tf.float32)
         bbox_case_2 = (tf.abs(bbox_diff) - 0.5) * tf.cast(tf.greater_equal(tf.abs(bbox_diff), 1), tf.float32)
-        bbox_loss = tf.reduce_sum(tf.transpose(tf.reshape(bbox_case_1 + bbox_case_2, [BATCH_SIZE, 4, 10]), [0, 2, 1]), axis=2)
+        bbox_loss = tf.reduce_mean(tf.reduce_sum(bbox_case_1 + bbox_case_2))
 
     with tf.variable_scope('cls_score'):
         cls_score = fully_connected(fc6, 10, False, tf.nn.leaky_relu)
-        cls_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_score)
+        cls_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=classes, logits=cls_score))
         cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(tf.nn.softmax(cls_score), 1), classes), tf.float32))
 
-    fast_loss = tf.reduce_sum(cls_loss) + tf.reduce_sum(bbox_loss / (VGG_FM_SIZE**2 * NUM_ANCHORS))
+    fast_loss = cls_loss + bbox_loss
     fast_train = tf.train.AdamOptimizer(LR_FAST).minimize(fast_loss)
 
 
@@ -346,7 +344,7 @@ if __name__ == "__main__":
         restore_xor_init(RESTORE_RPN, rpn_saver, RPN_PATH, rpn_init)
         restore_xor_init(RESTORE_FAST, fast_saver, FAST_PATH, fast_init)
 
-        train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
+        #train_writer = tf.summary.FileWriter("./summaries/train", tf.get_default_graph())
 
         feature_maps = []
         train_step = 0
@@ -405,7 +403,6 @@ if __name__ == "__main__":
             pickle.dump([xt, yt, tpreds, tslt, gtt, reg_loss_list, cls_loss_list, oal_loss_list], file)
 
         # select proposals according to IoU with mnist image and cls score
-
         print('select proposals')
         proposal_selection_tensor = select_proposals(iou_threshold=0.15, max_n_highest_cls_scores=9999, logits=logits_,
                                                     proposal_tensor=train_proposals_img,
@@ -415,10 +412,10 @@ if __name__ == "__main__":
         with open('proposal_selection_tensor.pkl', 'wb') as file:
             pickle.dump([proposal_selection_tensor], file)
 
-        loss_history = []
-        accu_history = []
-
         print('training step 2 started')
+
+        fast_loss_history = []
+        fast_accu_history = []
 
         for epoch in range(EPOCHS_TRAINSTEP_2):
             for n, image in enumerate(feature_maps):
@@ -433,75 +430,29 @@ if __name__ == "__main__":
 
                         pool5 = roi_pooling(image[:, :, :, 256:512], bounding_box, [ROI_FM_SIZE, ROI_FM_SIZE])
 
-                        gt_bounding_box = np.zeros((BATCH_SIZE, 40))
-                        gt_bounding_box[:, 0:9] = train_proposals_img[n][:, i, j, k]
-                        gt_bounding_box[:, 10:19] = train_proposals_img[n][:, i, j, 9 + k]
-                        gt_bounding_box[:, 20:29] = train_proposals_img[n][:, i, j, 18 + k]
-                        gt_bounding_box[:, 30:39] = train_proposals_img[n][:, i, j, 27 + k]
+                        gt_bounding_box = np.zeros((BATCH_SIZE, 4))
+                        gt_bounding_box[:, 0] = train_proposals_img[n][:, i, j, k]
+                        gt_bounding_box[:, 1] = train_proposals_img[n][:, i, j, 9 + k]
+                        gt_bounding_box[:, 2] = train_proposals_img[n][:, i, j, 18 + k]
+                        gt_bounding_box[:, 3] = train_proposals_img[n][:, i, j, 27 + k]
 
                         gt_class = train_selection_tensor[n][:, i, j, k, 1]
 
-                        _, floss, closs, rloss, accu = sess.run(
+                        _, f_loss, c_loss, r_loss, accu = sess.run(
                             [fast_train, fast_loss, cls_loss, bbox_loss, cls_accuracy],
                             feed_dict={rois: pool5, classes: gt_class, boxes: gt_bounding_box}
                         )
-                        loss_history.append([floss, closs, rloss])
-                        accu_history.append([accu])
+
+                        fast_loss_history.append([f_loss, c_loss, r_loss])
+                        fast_accu_history.append(accu)
+
                 print("Processed images in epoch " + str(epoch) + ": " + str(n))
 
         with open('fast_loss_history.pkl', 'wb') as file:
-            pickle.dump(loss_history, file)
-            pickle.dump(accu_history, file)
-
-        """
-        # Validation ##################################################################################################
-        vxt = None
-        vyt = None
-        vpreds = None
-        vslt = None
-        vgtt = None
-        vreg_loss_list = []
-        vcls_loss_list = []
-        voal_loss_list = []
-
-        for f in range(len(batcher.valid_data)):
-            result_tensor = sess.graph.get_tensor_by_name('conv5_3/Relu:0')
-
-            X_batch = batcher.valid_data[f]
-            Y_batch = batcher.valid_labels[f]
-
-            vgg16_conv5_3_relu = sess.run(result_tensor, feed_dict={images: X_batch.reshape((1, 256, 256, 3))})
-
-            vlr, vlc, vol, pres, clss = sess.run(
-                [rpn_reg_loss_normalized, rpn_cls_loss_normalized, overall_loss,
-                 predicted_coordinates, clshead_conv1],
-                feed_dict={X: vgg16_conv5_3_relu,
-                           Y: np.array(Y_batch).reshape((1, MAX_NUM_IMGS, 7)),
-                           anchor_coordinates: anchors[f],
-                           groundtruth_coordinates: valid_ground_truth_tensor[f],
-                           selection_tensor: valid_selection_tensor[f]})
-
-            vxt = X_batch
-            vyt = Y_batch
-            vpreds = pres
-            vslt = valid_selection_tensor[f]
-            vgtt = valid_ground_truth_tensor[f]
-            vreg_loss_list.append(vlr)
-            vcls_loss_list.append(vlc)
-            voal_loss_list.append(vol)
-
-            proposal_img, proposal_fm, valid_selection_tensor[f] = create_proposals(vpreds, vslt)
-            valid_proposals_img.append(proposal_img)
-            valid_proposals_fm.append(proposal_fm)
-
-        with open('vdump.pkl', 'wb') as file:
-            pickle.dump([vxt, vyt, vpreds, vslt, vgtt, vreg_loss_list, vcls_loss_list, voal_loss_list],
-                        file)
-
-        with open('valid_proposals.pkl', 'wb') as file:
-            pickle.dump([valid_proposals_img, valid_proposals_fm], file)
+            pickle.dump(fast_loss_history, file)
+        with open('fast_accu_history.pkl', 'wb') as file:
+            pickle.dump(fast_accu_history, file)
 
         storer = lambda boolean, saver, filename: saver.save(sess, CKPT_PATH + filename) if boolean else None
         storer(STORE_RPN, rpn_saver, 'rpn.ckpt')
         storer(STORE_FAST, fast_saver, 'fast.ckpt')
-        """
