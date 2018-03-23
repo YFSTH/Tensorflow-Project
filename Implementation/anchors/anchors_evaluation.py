@@ -1,5 +1,4 @@
 import pdb
-from anchors.debugging_module import *
 from anchors.anchors_selection import *
 
 def anchors_evaluation(batch_anchor_tensor, imgs, labels, load_last_anchors, filename, num_selected, lower_threshold, upper_threshold):
